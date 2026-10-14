@@ -40,14 +40,17 @@ FIELD_WEIGHTS = {
 AVATAR_BLOCKED_WEIGHT = 25
 
 _ZERO_WIDTH = re.compile(r"[\u00ad\u200b-\u200f\u2060-\u2064\ufeff]")
-_CONFUSABLES = str.maketrans(
-    {
-        "а": "a", "е": "e", "ё": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y",
-        "і": "i", "ї": "i", "ј": "j", "ѕ": "s", "к": "k", "м": "m", "т": "t", "в": "b",
-        "н": "h", "ԁ": "d", "ɡ": "g", "ı": "i", "ο": "o", "α": "a", "ε": "e", "ν": "v",
-        "τ": "t", "κ": "k", "ρ": "p", "χ": "x",
-    }
+_CONFUSABLE_MAP = {
+    "а": "a", "е": "e", "ё": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y",
+    "і": "i", "ї": "i", "ј": "j", "ѕ": "s", "к": "k", "м": "m", "т": "t", "в": "b",
+    "н": "h", "ԁ": "d", "ɡ": "g", "ı": "i", "ο": "o", "α": "a", "ε": "e", "ν": "v",
+    "τ": "t", "κ": "k", "ρ": "p", "χ": "x",
+}
+# Map capital look-alikes too (Cyrillic "Е" -> "E"); lowercasing happens after folding.
+_CONFUSABLE_MAP.update(
+    {k.upper(): v.upper() for k, v in list(_CONFUSABLE_MAP.items()) if len(k.upper()) == 1 and k.upper() != k}
 )
+_CONFUSABLES = str.maketrans(_CONFUSABLE_MAP)
 _LEET_DIGITS = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b"})
 _LEET_SYMBOLS = {"@": "a", "$": "s", "!": "i", "|": "l", "€": "e"}
 _CAMEL = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")

@@ -1,0 +1,1669 @@
+<title>RobloxChecker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Instrument+Sans:wght@400..700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a moderation desk. A tab rail on top; Check is a form on the left with a live verdict card on the right;
+   the Queue is a ledger of case rows on the left with the open case file on the right. Score meters are 10 "studs". */
+:root {
+  --bg: #eceff5;
+  --surface: #ffffff;
+  --surface-2: #f5f6fa;
+  --ink: #131927;
+  --muted: #586176;
+  --line: #d6dae4;
+  --accent: #2b4fd0;
+  --accent-ink: #ffffff;
+  --accent-soft: #e5eafc;
+  --open: #b85a07;
+  --open-soft: #fcefe1;
+  --danger: #c22636;
+  --danger-soft: #fbe6e8;
+  --ok: #19784d;
+  --ok-soft: #e0f3e9;
+  --closed: #737a8c;
+  --closed-soft: #eaecf1;
+  --stud-off: #e1e5ee;
+  --shadow: 0 1px 2px rgba(19, 25, 39, .06), 0 6px 20px rgba(19, 25, 39, .06);
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --r: 10px;
+  --r-sm: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e121a; --surface: #161b26; --surface-2: #1b2130; --ink: #e6e9f0; --muted: #9aa3b6; --line: #2a3243;
+    --accent: #85a1ff; --accent-ink: #0e121a; --accent-soft: #1f2a4a;
+    --open: #f2a35a; --open-soft: #3a2614; --danger: #ff6d7a; --danger-soft: #3d1b20; --ok: #52c78f; --ok-soft: #15301f;
+    --closed: #8d94a6; --closed-soft: #232a38; --stud-off: #283041;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e121a; --surface: #161b26; --surface-2: #1b2130; --ink: #e6e9f0; --muted: #9aa3b6; --line: #2a3243;
+  --accent: #85a1ff; --accent-ink: #0e121a; --accent-soft: #1f2a4a;
+  --open: #f2a35a; --open-soft: #3a2614; --danger: #ff6d7a; --danger-soft: #3d1b20; --ok: #52c78f; --ok-soft: #15301f;
+  --closed: #8d94a6; --closed-soft: #232a38; --stud-off: #283041;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--font-display); font-stretch: 85%; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font-size: 22px; font-weight: 750; }
+h3 { font-size: 16px; font-weight: 700; }
+p { margin: 0; }
+a { color: var(--accent); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.label { font-size: 11.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- header & tabs ---------- */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; flex-direction: column; gap: 6px; padding-block: 12px 0; }
+.brandrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mark { display: grid; grid-template-columns: repeat(2, 9px); gap: 3px; flex: none; }
+.mark i { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); }
+.mark i:nth-child(2) { background: var(--open); }
+.mark i:nth-child(3) { background: var(--danger); }
+.brand h1 { font-size: 22px; font-weight: 800; font-stretch: 78%; letter-spacing: 0; }
+.brand .sub { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.who { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.avatars { display: flex; align-items: center; }
+.avatars img { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--bg); margin-left: -7px; background: var(--surface-2); }
+.avatars img:first-child { margin-left: 0; }
+.online { font-size: 12.5px; color: var(--muted); }
+.conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.conn::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--closed); }
+.conn.live::before { background: var(--ok); }
+.conn.off::before { background: var(--open); }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { appearance: none; border: 0; background: none; color: var(--muted); font: 600 14px var(--font-body); padding: 10px 12px; border-bottom: 3px solid transparent; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.count { font: 600 11.5px var(--font-mono); padding: 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+.count.hot { background: var(--open-soft); color: var(--open); border-color: transparent; }
+
+main.wrap { padding-block: 22px 60px; }
+.banner { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); margin-bottom: 18px; font-size: 14px; }
+.banner.warn { background: var(--open-soft); border-color: transparent; }
+.banner b { font-weight: 650; }
+
+/* ---------- generic controls ---------- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); }
+.pad { padding: 18px; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.spread { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.btn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 14px var(--font-body); padding: 8px 14px; border-radius: var(--r-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+.btn.ghost { border-color: transparent; background: none; color: var(--muted); padding-inline: 8px; }
+.btn.ghost:hover:not(:disabled) { color: var(--ink); border-color: transparent; }
+.btn.sm { font-size: 13px; padding: 5px 10px; }
+input[type="text"], input[type="number"], input[type="date"], input[type="search"], textarea, select {
+  width: 100%; font: 15px var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; min-width: 0;
+}
+textarea { resize: vertical; min-height: 64px; line-height: 1.45; }
+input:focus, textarea:focus, select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field > span { font-size: 13px; font-weight: 600; }
+.field small { color: var(--muted); font-size: 12px; }
+.check { display: flex; gap: 9px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+.check input { margin-top: 3px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 14px; }
+fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+legend { padding: 0; margin-bottom: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; font: 650 11.5px var(--font-body); letter-spacing: .05em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+.chip.alt { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.chip.nsfw { background: var(--danger); color: #fff; border-color: transparent; }
+.chip.manual { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.chip.open { background: var(--open-soft); color: var(--open); border-color: transparent; }
+.empty { text-align: center; padding: 34px 18px; color: var(--muted); display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.empty h3 { color: var(--ink); }
+.empty p { max-width: 46ch; }
+
+/* ---------- check tab ---------- */
+.check-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); gap: 22px; align-items: start; }
+.form-card { display: flex; flex-direction: column; }
+.form-card section { padding: 18px; border-top: 1px solid var(--line); }
+.form-card section:first-child { border-top: 0; }
+.paste { border: 1.5px dashed var(--line); border-radius: var(--r); padding: 12px; background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
+.paste.drag { border-color: var(--accent); background: var(--accent-soft); }
+.paste textarea { min-height: 70px; background: var(--surface); }
+.thumb { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+.thumb img { width: 64px; height: 48px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); }
+.example { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 9px 12px; border-radius: var(--r-sm); background: var(--accent-soft); color: var(--ink); font-size: 13.5px; }
+.result-col { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 108px); display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 124px); max-height: calc(100dvh - 124px); overflow-y: auto; overscroll-behavior: contain; padding-bottom: 4px; }
+.result-head { padding: 18px 18px 0; display: flex; flex-direction: column; gap: 6px; }
+.result-head .name { font-family: var(--font-display); font-size: 24px; font-weight: 780; font-stretch: 82%; line-height: 1.15; overflow-wrap: anywhere; }
+.gauges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 18px; }
+.gauge { border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface-2); }
+.gauge .num { font-family: var(--font-display); font-weight: 800; font-size: 40px; line-height: 1; font-stretch: 75%; font-variant-numeric: tabular-nums; }
+.gauge .num small { font-size: 16px; color: var(--muted); font-weight: 600; }
+.studs { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+.studs i { aspect-ratio: 1; max-width: 100%; border-radius: 3px; background: var(--stud-off); }
+.studs.sev-low i.on { background: var(--ok); }
+.studs.sev-mid i.on { background: var(--open); }
+.studs.sev-high i.on { background: var(--danger); }
+.verdict { font-weight: 650; font-size: 13.5px; }
+.verdict.sev-low { color: var(--ok); }
+.verdict.sev-mid { color: var(--open); }
+.verdict.sev-high { color: var(--danger); }
+.reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.reasons li { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.reasons li:first-child { border-top: 0; }
+.pts { font: 600 13px var(--font-mono); text-align: right; }
+.pts.up { color: var(--danger); }
+.pts.down { color: var(--ok); }
+.result-body { padding: 0 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.spoiler { background: var(--ink); color: transparent; border-radius: 3px; padding: 0 4px; cursor: pointer; user-select: none; font-family: var(--font-mono); font-size: 12.5px; }
+.spoiler.shown { background: var(--danger-soft); color: var(--danger); user-select: text; }
+.actions-card { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ---------- queue ---------- */
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg button { appearance: none; border: 0; background: none; color: var(--muted); font: 600 13px var(--font-body); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.toolbar input[type="search"] { max-width: 240px; flex: 1 1 160px; }
+.queue-grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 20px; align-items: start; }
+.caselist { display: flex; flex-direction: column; overflow: hidden; }
+.caserow { appearance: none; border: 0; border-top: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; display: grid; grid-template-columns: 4px 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 14px 12px 0; }
+.caserow:first-child { border-top: 0; }
+.caserow:hover { background: var(--surface-2); }
+.caserow[aria-current="true"] { background: var(--accent-soft); }
+.stripe { align-self: stretch; border-radius: 0 3px 3px 0; background: var(--closed); }
+.st-open .stripe { background: var(--open); }
+.st-claimed .stripe { background: var(--accent); }
+.st-confirmed .stripe { background: var(--danger); }
+.st-dismissed .stripe { background: var(--closed); }
+.caseno { font: 600 13px var(--font-mono); color: var(--muted); }
+.casemain { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.casemain .who { justify-content: flex-start; gap: 6px; }
+.casemain strong { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.casemeta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 12.5px; color: var(--muted); text-align: right; }
+.mini { font: 600 12px var(--font-mono); color: var(--muted); }
+.viewing { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--accent); }
+.viewing img { width: 18px; height: 18px; border-radius: 50%; }
+.casefile { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 108px); max-height: calc(100vh - 124px); max-height: calc(100dvh - 124px); overflow-y: auto; overscroll-behavior: contain; }
+.cf-head { padding: 18px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
+.cf-title { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.cf-title h2 { font-size: 24px; overflow-wrap: anywhere; }
+.stamp { font: 800 13px var(--font-display); font-stretch: 80%; letter-spacing: .12em; text-transform: uppercase; padding: 4px 10px; border: 2px solid currentColor; border-radius: 4px; transform: rotate(-3deg); white-space: nowrap; flex: none; }
+.stamp.open { color: var(--open); }
+.stamp.claimed { color: var(--accent); }
+.stamp.confirmed { color: var(--danger); }
+.stamp.dismissed { color: var(--closed); }
+.cf-body { padding: 18px; display: flex; flex-direction: column; gap: 18px; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.fact { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fact b { font: 650 15px var(--font-mono); overflow-wrap: anywhere; }
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.notes { display: flex; flex-direction: column; gap: 12px; }
+.note { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; }
+.note img { width: 28px; height: 28px; border-radius: 50%; }
+.note .body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; }
+.composer { padding: 0 18px 18px; display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------- lists (trusted, activity, settings) ---------- */
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 11px 18px; border-top: 1px solid var(--line); }
+.list li:first-child { border-top: 0; }
+.list .grow { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.logline { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 18px; border-top: 1px solid var(--line); font-size: 14px; }
+.logline:first-child { border-top: 0; }
+.logline img { width: 26px; height: 26px; border-radius: 50%; }
+.statgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.stat { padding: 14px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
+.stat b { display: block; font: 800 30px var(--font-display); font-stretch: 75%; font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 9px 18px; border-top: 1px solid var(--line); }
+th { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 650; border-top: 0; }
+td.n { font-family: var(--font-mono); text-align: right; }
+th.n { text-align: right; }
+
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: var(--r-sm); font-size: 14px; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; max-width: calc(100% - 32px); z-index: 20; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.err { background: var(--danger); color: #fff; }
+
+@media (max-width: 960px) {
+  .check-grid, .queue-grid, .two { grid-template-columns: minmax(0, 1fr); }
+  .result-col, .casefile { position: static; max-height: none; overflow: visible; }
+  .statgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); }
+  .gauges { grid-template-columns: minmax(0, 1fr); }
+  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .caserow { grid-template-columns: 4px 44px minmax(0, 1fr); }
+  .casemeta { grid-column: 3; align-items: flex-start; text-align: left; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+  .brand .sub { display: none; }
+  th, td { padding: 8px 10px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brandrow">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <h1>RobloxChecker</h1>
+        <span class="sub">Alt &amp; NSFW moderation desk</span>
+      </div>
+      <div class="who">
+        <span class="avatars" id="online-avatars"></span>
+        <span class="online" id="online-text"></span>
+        <span class="conn" id="conn">Connecting…</span>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" id="tab-btn-check" data-tab="check" aria-selected="true">Check a player</button>
+      <button class="tab" role="tab" id="tab-btn-queue" data-tab="queue" aria-selected="false">Review queue <span class="count" id="count-open">0</span></button>
+      <button class="tab" role="tab" id="tab-btn-trusted" data-tab="trusted" aria-selected="false">Trusted <span class="count" id="count-trusted">0</span></button>
+      <button class="tab" role="tab" id="tab-btn-activity" data-tab="activity" aria-selected="false">Team activity</button>
+      <button class="tab" role="tab" id="tab-btn-settings" data-tab="settings" aria-selected="false">Filter &amp; settings</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="banner warn" id="access-banner" hidden></div>
+
+  <!-- ===================== CHECK ===================== -->
+  <section id="tab-check" role="tabpanel" aria-labelledby="tab-btn-check">
+    <div class="check-grid">
+      <form class="card form-card" id="check-form" autocomplete="off">
+        <section class="stack">
+          <div class="spread">
+            <h2>Check a player</h2>
+            <button type="button" class="btn ghost sm" id="clear-form">Clear form</button>
+          </div>
+          <div class="example" id="example-note">
+            <span><b>Example profile.</b> This isn't a real player. Clear the form or paste a real profile to check someone.</span>
+          </div>
+          <div class="paste" id="paste-zone">
+            <label class="field" for="paste-text">
+              <span>Fill in from Roblox</span>
+              <small id="paste-help">Open the player's Roblox profile, select all (Ctrl+A), copy, and paste here.</small>
+            </label>
+            <textarea id="paste-text" placeholder="Paste the profile page text here"></textarea>
+            <div class="thumb" id="paste-thumb" hidden></div>
+            <div class="row">
+              <button type="button" class="btn" id="paste-fill">Fill in the form</button>
+              <span class="small muted" id="paste-status" role="status"></span>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <fieldset>
+            <legend class="label">Names &amp; profile text</legend>
+            <div class="grid2">
+              <label class="field" for="f-username"><span>Username</span><input type="text" id="f-username" placeholder="e.g. Builderman" maxlength="40"></label>
+              <label class="field" for="f-display"><span>Display name</span><input type="text" id="f-display" maxlength="60"></label>
+            </div>
+            <label class="field" for="f-bio"><span>About (bio)</span><textarea id="f-bio" maxlength="2000"></textarea></label>
+            <div class="grid2">
+              <label class="field" for="f-past"><span>Past usernames</span><input type="text" id="f-past" placeholder="Separate with commas"><small>Shown on the profile under the name.</small></label>
+              <label class="field" for="f-groups"><span>Group names</span><textarea id="f-groups" placeholder="One per line"></textarea></label>
+            </div>
+          </fieldset>
+        </section>
+
+        <section>
+          <fieldset>
+            <legend class="label">Account &amp; badges</legend>
+            <div class="grid3">
+              <label class="field" for="f-join"><span>Join date</span><input type="date" id="f-join"></label>
+              <label class="field" for="f-badges"><span>Game badges</span><input type="number" id="f-badges" min="0" step="1" inputmode="numeric"></label>
+              <label class="field" for="f-games"><span>Games they're from</span><input type="number" id="f-games" min="0" step="1" inputmode="numeric"></label>
+            </div>
+            <label class="check" for="f-hidden"><input type="checkbox" id="f-hidden"><span>Their badges / inventory are private</span></label>
+            <label class="check" for="f-burst"><input type="checkbox" id="f-burst"><span>Most badges were earned within the same day (farming)</span></label>
+            <label class="check" for="f-recent"><input type="checkbox" id="f-recent"><span>Old account that only started earning badges in the last 2 weeks</span></label>
+            <label class="field" for="f-first" style="max-width: 260px"><span>First badge earned (optional)</span><input type="date" id="f-first"></label>
+          </fieldset>
+        </section>
+
+        <section>
+          <fieldset>
+            <legend class="label">Social &amp; account extras</legend>
+            <div class="grid3">
+              <label class="field" for="f-friends"><span>Connections</span><input type="number" id="f-friends" min="0" step="1" inputmode="numeric"></label>
+              <label class="field" for="f-followers"><span>Followers</span><input type="number" id="f-followers" min="0" step="1" inputmode="numeric"></label>
+              <label class="field" for="f-groupcount"><span>Groups</span><input type="number" id="f-groupcount" min="0" step="1" inputmode="numeric"><small>Filled from the names above if empty.</small></label>
+            </div>
+            <div class="grid2">
+              <label class="check" for="f-verified"><input type="checkbox" id="f-verified"><span>Has the Roblox verified badge</span></label>
+              <label class="check" for="f-premium"><input type="checkbox" id="f-premium"><span>Has had Roblox Premium</span></label>
+              <label class="check" for="f-avatar"><input type="checkbox" id="f-avatar"><span>Avatar picture is blocked by Roblox</span></label>
+              <label class="field" for="f-legacy"><span>Other Roblox badges (Veteran, Friendship…)</span><input type="number" id="f-legacy" min="0" step="1" inputmode="numeric"></label>
+            </div>
+          </fieldset>
+        </section>
+      </form>
+
+      <div class="result-col">
+        <div class="card" id="result" aria-live="polite"></div>
+        <div class="card actions-card" id="check-actions">
+          <div id="existing-case" class="small"></div>
+          <label class="field" for="case-reason"><span>Note for the team (optional)</span><input type="text" id="case-reason" maxlength="500" placeholder="What should other mods look at?"></label>
+          <div class="row">
+            <button type="button" class="btn primary" id="open-case" data-needs-write>Open case</button>
+            <button type="button" class="btn" id="trust-btn" data-needs-write>Mark trusted</button>
+          </div>
+          <p class="small muted" id="action-hint"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== QUEUE ===================== -->
+  <section id="tab-queue" role="tabpanel" aria-labelledby="tab-btn-queue" hidden>
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Filter cases" id="queue-filter">
+        <button type="button" data-filter="open" aria-pressed="true">Open</button>
+        <button type="button" data-filter="unclaimed" aria-pressed="false">Unclaimed</button>
+        <button type="button" data-filter="mine" aria-pressed="false">Mine</button>
+        <button type="button" data-filter="confirmed" aria-pressed="false">Confirmed</button>
+        <button type="button" data-filter="dismissed" aria-pressed="false">Dismissed</button>
+        <button type="button" data-filter="all" aria-pressed="false">All</button>
+      </div>
+      <input type="search" id="queue-search" placeholder="Search name or #number" aria-label="Search cases">
+    </div>
+    <div class="queue-grid">
+      <div class="card caselist" id="case-list"></div>
+      <div class="card casefile" id="case-file">
+        <div id="cf-main"></div>
+        <div class="composer" id="cf-composer" hidden>
+          <label class="field" for="note-text"><span>Add a note</span><textarea id="note-text" maxlength="1000" placeholder="What did you find? Other mods will see this."></textarea></label>
+          <div class="row"><button type="button" class="btn" id="note-send" data-needs-write>Post note</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TRUSTED ===================== -->
+  <section id="tab-trusted" role="tabpanel" aria-labelledby="tab-btn-trusted" hidden>
+    <div class="two">
+      <div class="card pad stack">
+        <h2>Trusted accounts</h2>
+        <p class="muted">Accounts the team has checked and decided are fine. Checking one shows a trusted badge, so nobody opens a case on them by mistake.</p>
+        <label class="field" for="t-username"><span>Username</span><input type="text" id="t-username" maxlength="40"></label>
+        <label class="field" for="t-reason"><span>Why it's OK</span><input type="text" id="t-reason" maxlength="300" placeholder="e.g. Verified main of our server owner"></label>
+        <div class="row"><button type="button" class="btn primary" id="t-add" data-needs-write>Add to trusted</button></div>
+      </div>
+      <div class="card"><ul class="list" id="trusted-list"></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== ACTIVITY ===================== -->
+  <section id="tab-activity" role="tabpanel" aria-labelledby="tab-btn-activity" hidden>
+    <div class="stack">
+      <div class="statgrid" id="stats"></div>
+      <div class="two">
+        <div class="card">
+          <div class="pad"><h3>Moderators · last 30 days</h3></div>
+          <div class="table-wrap"><table id="mod-table"></table></div>
+        </div>
+        <div class="card">
+          <div class="pad"><h3>Recent actions</h3></div>
+          <div id="log-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== SETTINGS ===================== -->
+  <section id="tab-settings" role="tabpanel" aria-labelledby="tab-btn-settings" hidden>
+    <div class="two">
+      <div class="stack">
+        <div class="card pad stack">
+          <h2>Test the NSFW filter</h2>
+          <p class="muted small">Type a name or bio to see what the filter catches. Tricks like <span class="mono">s3x</span>, <span class="mono">s e x</span>, stretched letters and look-alike characters are undone first.</p>
+          <textarea id="test-text" placeholder="e.g. add me 4 fun, 18+ only"></textarea>
+          <div id="test-result" class="small"></div>
+        </div>
+        <div class="card pad stack">
+          <div class="spread"><h2>Thresholds</h2><span class="small muted" id="thr-note"></span></div>
+          <div class="grid3">
+            <label class="field" for="thr-alt"><span>Likely alt at</span><input type="number" id="thr-alt" min="1" max="100"></label>
+            <label class="field" for="thr-sus"><span>Suspicious at</span><input type="number" id="thr-sus" min="1" max="100"></label>
+            <label class="field" for="thr-nsfw"><span>NSFW flag at</span><input type="number" id="thr-nsfw" min="1" max="100"></label>
+          </div>
+          <div class="row"><button type="button" class="btn" id="thr-save">Save thresholds</button></div>
+        </div>
+      </div>
+      <div class="card pad stack">
+        <h2>Filter words</h2>
+        <p class="muted small">Add words your team keeps seeing, or switch off a built-in one that causes false alarms. Points add up per account; the NSFW threshold (<span id="thr-inline">40</span>) or more gets flagged.</p>
+        <div class="grid3">
+          <label class="field" for="term-text"><span>Word or phrase</span><input type="text" id="term-text" maxlength="50" placeholder="letters and spaces"></label>
+          <label class="field" for="term-weight"><span>Points</span><input type="number" id="term-weight" min="1" max="100" value="40"></label>
+          <label class="field" for="term-match"><span>Match</span><select id="term-match"><option value="word">Whole word</option><option value="prefix">Start of a word</option><option value="substring">Anywhere</option></select></label>
+        </div>
+        <div class="row"><button type="button" class="btn primary" id="term-add" data-needs-write>Add word</button></div>
+        <div class="grid2" style="align-items: end">
+          <label class="field" for="term-disable"><span>Switch off a built-in rule</span><select id="term-disable"></select></label>
+          <div><button type="button" class="btn" id="term-disable-btn" data-needs-write>Switch off</button></div>
+        </div>
+        <h3>Your team's changes</h3>
+        <ul class="list" id="term-list" style="margin-inline: -18px"></ul>
+      </div>
+    </div>
+  </section>
+  <p class="small muted" style="margin-top:28px">RobloxChecker is a community moderation tool. It isn't made by or affiliated with Roblox. Scores are hints for moderators, never proof on their own.</p>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script id="engine">
+/* Scoring engine: a JavaScript port of the Discord bot's alt_detector.py and content_filter.py. */
+const ENGINE = (() => {
+  const DEFAULTS = {"terms":[{"term":"porn","weight":60,"match":"substring","category":"explicit"},{"term":"hentai","weight":60,"match":"substring","category":"explicit"},{"term":"nsfw","weight":60,"match":"substring","category":"explicit"},{"term":"onlyfans","weight":60,"match":"substring","category":"explicit"},{"term":"xvideos","weight":60,"match":"substring","category":"explicit"},{"term":"xhamster","weight":60,"match":"substring","category":"explicit"},{"term":"chaturbate","weight":60,"match":"substring","category":"explicit"},{"term":"erotic","weight":60,"match":"prefix","category":"explicit"},{"term":"masturbat","weight":60,"match":"substring","category":"explicit"},{"term":"orgasm","weight":60,"match":"prefix","category":"explicit"},{"term":"blowjob","weight":60,"match":"substring","category":"explicit"},{"term":"handjob","weight":60,"match":"substring","category":"explicit"},{"term":"bdsm","weight":60,"match":"substring","category":"explicit"},{"term":"femdom","weight":60,"match":"substring","category":"explicit"},{"term":"sexting","weight":60,"match":"word","category":"explicit"},{"term":"sext","weight":55,"match":"word","category":"explicit"},{"term":"nude","weight":55,"match":"prefix","category":"explicit"},{"term":"nudz","weight":55,"match":"word","category":"explicit"},{"term":"noods","weight":40,"match":"word","category":"explicit"},{"term":"dildo","weight":55,"match":"prefix","category":"explicit"},{"term":"jerk off","weight":50,"match":"word","category":"explicit"},{"term":"jack off","weight":50,"match":"word","category":"explicit"},{"term":"sex","weight":45,"match":"word","category":"explicit"},{"term":"sexy","weight":30,"match":"prefix","category":"sexual"},{"term":"sexual","weight":30,"match":"word","category":"sexual"},{"term":"horny","weight":50,"match":"prefix","category":"sexual"},{"term":"lewd","weight":40,"match":"prefix","category":"sexual"},{"term":"smut","weight":40,"match":"word","category":"sexual"},{"term":"kink","weight":40,"match":"prefix","category":"sexual"},{"term":"fetish","weight":45,"match":"prefix","category":"sexual"},{"term":"bondage","weight":45,"match":"prefix","category":"sexual"},{"term":"milf","weight":50,"match":"substring","category":"sexual"},{"term":"dilf","weight":50,"match":"substring","category":"sexual"},{"term":"slut","weight":45,"match":"prefix","category":"sexual"},{"term":"whore","weight":45,"match":"prefix","category":"sexual"},{"term":"thot","weight":25,"match":"word","category":"sexual"},{"term":"stripper","weight":35,"match":"prefix","category":"sexual"},{"term":"spank","weight":35,"match":"prefix","category":"sexual"},{"term":"cum","weight":40,"match":"word","category":"sexual"},{"term":"cumming","weight":45,"match":"word","category":"sexual"},{"term":"boobs","weight":35,"match":"word","category":"sexual"},{"term":"boobies","weight":35,"match":"word","category":"sexual"},{"term":"tits","weight":40,"match":"word","category":"sexual"},{"term":"titties","weight":50,"match":"prefix","category":"sexual"},{"term":"pussy","weight":40,"match":"word","category":"sexual"},{"term":"dick","weight":30,"match":"word","category":"sexual"},{"term":"cock","weight":35,"match":"word","category":"sexual"},{"term":"penis","weight":45,"match":"prefix","category":"sexual"},{"term":"vagina","weight":45,"match":"prefix","category":"sexual"},{"term":"genital","weight":45,"match":"prefix","category":"sexual"},{"term":"thicc","weight":20,"match":"prefix","category":"sexual"},{"term":"booty","weight":15,"match":"word","category":"sexual"},{"term":"gooning","weight":40,"match":"word","category":"sexual"},{"term":"rape","weight":50,"match":"word","category":"sexual"},{"term":"raped","weight":50,"match":"word","category":"sexual"},{"term":"raping","weight":50,"match":"word","category":"sexual"},{"term":"rapist","weight":50,"match":"word","category":"sexual"},{"term":"freaky","weight":25,"match":"prefix","category":"innuendo"},{"term":"daddy","weight":15,"match":"word","category":"innuendo"},{"term":"mommy","weight":15,"match":"word","category":"innuendo"},{"term":"zaddy","weight":20,"match":"word","category":"innuendo"},{"term":"sugar daddy","weight":30,"match":"word","category":"innuendo"},{"term":"sugar baby","weight":30,"match":"word","category":"innuendo"},{"term":"step sis","weight":30,"match":"word","category":"innuendo"},{"term":"stepsis","weight":30,"match":"substring","category":"innuendo"},{"term":"condo","weight":35,"match":"word","category":"roblox-erp"},{"term":"condos","weight":35,"match":"word","category":"roblox-erp"},{"term":"scented con","weight":50,"match":"prefix","category":"roblox-erp"},{"term":"snowbunny","weight":40,"match":"substring","category":"roblox-erp"},{"term":"snow bunny","weight":40,"match":"word","category":"roblox-erp"},{"term":"send pics","weight":35,"match":"word","category":"solicitation"},{"term":"irl pics","weight":30,"match":"word","category":"solicitation"},{"term":"feet pics","weight":40,"match":"word","category":"solicitation"},{"term":"looking for fun","weight":25,"match":"word","category":"solicitation"},{"term":"edate","weight":20,"match":"prefix","category":"online-dating"},{"term":"online dating","weight":20,"match":"word","category":"online-dating"},{"term":"odr","weight":20,"match":"word","category":"online-dating"},{"term":"oder","weight":20,"match":"word","category":"online-dating"},{"term":"snapchat","weight":10,"match":"word","category":"off-platform"},{"term":"snap","weight":10,"match":"word","category":"off-platform"},{"term":"telegram","weight":10,"match":"word","category":"off-platform"},{"term":"kik","weight":10,"match":"word","category":"off-platform"}],"patterns":[{"label":"ERP (erotic roleplay)","pattern":"(?<![a-z0-9])e[\\s._\\-]*r[\\s._\\-]*p(?![a-z])","weight":55,"category":"roblox-erp"},{"label":"rule34","pattern":"(?<![a-z0-9])r(?:ule)?[\\s._\\-]*34(?![0-9])","weight":60,"category":"explicit"},{"label":"\"add/dm me for fun\"","pattern":"\\b(?:add|dm|msg|message|text|friend|frend)\\s+(?:me\\s+)?(?:for|4)\\s+(?:some\\s+)?(?:fun|funn+|a\\s+good\\s+time)\\b","weight":35,"category":"solicitation"},{"label":"18+ / adults-only claim","pattern":"(?<![0-9])(?:1[89]|2[0-9])\\s*\\+","weight":20,"category":"age-gated"},{"label":"\"minors DNI\" / \"no minors\"","pattern":"\\b(?:no\\s+minors|minors\\s+(?:dni|do\\s*n['’]?t\\s+interact|stay\\s+away|go\\s+away)|adults?\\s+only)\\b","weight":25,"category":"age-gated"},{"label":"discord contact","pattern":"\\b(?:discord|dc|disc)\\s*[:\\-@]|discord\\.gg/|discord\\.com/invite","weight":10,"category":"off-platform"},{"label":"69","pattern":"(?<![0-9])69(?![0-9])","weight":10,"category":"innuendo"}]};
+  const MATCH_MODES = ["word", "prefix", "substring"];
+  const FIELD_WEIGHTS = { "username": 1.2, "display name": 1.2, "description": 1.0, "past username": 1.0, "group": 0.6 };
+  const AVATAR_BLOCKED_WEIGHT = 25;
+  const ZERO_WIDTH = /[­​-‏⁠-⁤﻿]/g;
+  const BASE_CONFUSABLES = {
+    "а": "a", "е": "e", "ё": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y",
+    "і": "i", "ї": "i", "ј": "j", "ѕ": "s", "к": "k", "м": "m", "т": "t", "в": "b",
+    "н": "h", "ԁ": "d", "ɡ": "g", "ı": "i", "ο": "o", "α": "a", "ε": "e", "ν": "v",
+    "τ": "t", "κ": "k", "ρ": "p", "χ": "x",
+  };
+  const CONFUSABLES = {};
+  for (const [k, v] of Object.entries(BASE_CONFUSABLES)) {
+    CONFUSABLES[k] = v;
+    const upper = k.toUpperCase();
+    if (upper !== k && upper.length === 1) CONFUSABLES[upper] = v.toUpperCase();
+  }
+  const LEET_DIGITS = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b" };
+  const LEET_SYMBOLS = { "@": "a", "$": "s", "!": "i", "|": "l", "€": "e" };
+  const CAMEL = /(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/g;
+  const NOT_LETTER = /[^a-z*]+/g;
+  const SPACED = /(?<![a-z*])(?:[a-z*] ){2,}[a-z*](?![a-z*])/g;
+  const TERM_CHARS = /^[a-z ]+$/;
+  const isAlpha = (ch) => !!ch && /\p{L}/u.test(ch);
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\\/-]/g, "\\$&");
+
+  function fold(text) {
+    return Array.from(String(text).normalize("NFKC").replace(ZERO_WIDTH, ""), (c) => CONFUSABLES[c] ?? c).join("");
+  }
+  function normalizeTerm(term) {
+    const text = fold(term).toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+    if (text.length < 2 || text.length > 50 || !TERM_CHARS.test(text)) return null;
+    return text;
+  }
+  function lettersOnly(text) {
+    return text.replace(NOT_LETTER, " ").trim().replace(SPACED, (m) => m.replace(/ /g, ""));
+  }
+  function deleet(text) {
+    return text.split(/\s+/).filter(Boolean).map((token) => {
+      if (!Array.from(token).some(isAlpha)) return token;
+      const chars = Array.from(token, (c) => LEET_DIGITS[c] ?? c);
+      for (let i = 0; i < chars.length; i++) {
+        if (LEET_SYMBOLS[chars[i]] && isAlpha(chars[i + 1])) chars[i] = LEET_SYMBOLS[chars[i]];
+      }
+      return chars.join("");
+    }).join(" ");
+  }
+  function views(text) {
+    const folded = fold(text);
+    const raw = folded.toLowerCase();
+    const split = folded.replace(CAMEL, " ").toLowerCase();
+    const plain = lettersOnly(split);
+    const leet = lettersOnly(deleet(split));
+    return [raw, leet === plain ? [plain] : [plain, leet]];
+  }
+  function compileTerm(term, match) {
+    let body = "";
+    for (const ch of term) {
+      if (ch === " ") { body += "\\s+"; continue; }
+      const options = ch + ("aeiouy".includes(ch) ? "*" : "") + (ch === "l" ? "i" : "");
+      body += (options.length === 1 ? esc(ch) : "[" + esc(options) + "]") + "+";
+    }
+    if (match === "word") return new RegExp("(?<![a-z*])" + body + "(?![a-z*])");
+    if (match === "prefix") return new RegExp("(?<![a-z*])" + body);
+    return new RegExp(body);
+  }
+
+  /** overrides: [{term, weight, match, category}] — weight 0 switches a rule off. */
+  function buildFilter(overrides = []) {
+    const terms = new Map();
+    for (const e of DEFAULTS.terms) {
+      const key = normalizeTerm(e.term);
+      if (key) terms.set(key, { weight: e.weight, match: e.match || "word", category: e.category || "sexual", builtin: true });
+    }
+    const disabled = new Set();
+    for (const o of overrides) {
+      const key = normalizeTerm(o.term);
+      if (!(o.weight > 0)) { disabled.add(key || String(o.term).toLowerCase()); if (key) terms.delete(key); continue; }
+      if (!key) continue;
+      const prev = terms.get(key);
+      terms.set(key, { weight: o.weight, match: MATCH_MODES.includes(o.match) ? o.match : "word", category: o.category || "custom", builtin: !!prev?.builtin });
+    }
+    const rules = [];
+    for (const [key, t] of terms) rules.push({ key, label: key, category: t.category, weight: t.weight, regex: compileTerm(key, t.match), raw: false, builtin: t.builtin, match: t.match });
+    for (const p of DEFAULTS.patterns) {
+      if (disabled.has(p.label.toLowerCase())) continue;
+      rules.push({ key: "pattern:" + p.label, label: p.label, category: p.category || "sexual", weight: p.weight, regex: new RegExp(p.pattern), raw: true, builtin: true, match: "pattern" });
+    }
+    return { rules };
+  }
+  function scanText(filter, text, field = "description") {
+    if (!text || !String(text).trim()) return [];
+    const [raw, normalised] = views(text);
+    const mult = FIELD_WEIGHTS[field] ?? 1.0;
+    const hits = [];
+    for (const rule of filter.rules) {
+      for (const hay of rule.raw ? [raw] : normalised) {
+        const m = rule.regex.exec(hay);
+        if (m) { hits.push({ label: rule.label, category: rule.category, field, weight: Math.round(rule.weight * mult), matched: m[0].trim() }); break; }
+      }
+    }
+    return hits;
+  }
+  function scanFields(filter, fields, threshold, extra = []) {
+    const best = new Map();
+    for (const [field, text] of fields) {
+      for (const hit of scanText(filter, text, field)) {
+        const cur = best.get(hit.label);
+        if (!cur || hit.weight > cur.weight) best.set(hit.label, hit);
+      }
+    }
+    for (const hit of extra) best.set(hit.label, hit);
+    const hits = [...best.values()].sort((a, b) => b.weight - a.weight);
+    const score = Math.min(100, hits.reduce((s, h) => s + h.weight, 0));
+    return { score, flagged: score >= threshold, hits };
+  }
+  function scanProfile(filter, p, threshold) {
+    const fields = [["username", p.username], ["display name", p.displayName], ["description", p.bio]];
+    for (const n of p.pastNames) fields.push(["past username", n]);
+    for (const g of p.groups) fields.push(["group", g]);
+    const extra = p.avatarBlocked ? [{ label: "Avatar picture blocked by Roblox", category: "avatar", field: "avatar", weight: AVATAR_BLOCKED_WEIGHT, matched: "" }] : [];
+    return scanFields(filter, fields, threshold, extra);
+  }
+
+  const LIKELY_ALT = "Likely alt", SUSPICIOUS = "Suspicious", LIKELY_MAIN = "Likely main";
+  const DAY = 86400000;
+  const dayNumber = (iso) => { const t = Date.parse(iso + "T00:00:00Z"); return Number.isNaN(t) ? null : Math.floor(t / DAY); };
+
+  /** Same signals and points as the bot, from what a moderator typed in. */
+  function altReport(p, cfg, now = Date.now()) {
+    const signals = [], missing = [];
+    const add = (points, label) => signals.push({ points, label });
+    if (p.verified) add(-40, "Roblox verified badge");
+
+    const joined = p.joinDate ? dayNumber(p.joinDate) : null;
+    const age = joined === null ? null : Math.max(0, Math.floor(now / DAY) - joined);
+    if (age === null) missing.push("join date");
+    else if (age < 3) add(35, `Brand new account (${age} days old)`);
+    else if (age < 14) add(28, `Very new account (${age} days old)`);
+    else if (age < 30) add(20, `New account (${age} days old)`);
+    else if (age < 90) add(12, `Young account (${age} days old)`);
+    else if (age < 365) add(5, `Account under a year old (${age} days)`);
+    else if (age >= 3 * 365) add(-10, `Established account (${Math.floor(age / 365)} years old)`);
+
+    if (p.badgesHidden) add(6, "Badges are private, so they couldn't be checked");
+    else if (p.badges === null) missing.push("badge count");
+    else {
+      const count = p.badges;
+      if (count === 0) add(30, "No game badges at all");
+      else if (count < 5) add(22, `Very few badges (${count})`);
+      else if (count < 20) add(12, `Few badges (${count})`);
+      else if (count < 50) add(5, `Low badge count (${count})`);
+      else if (count >= 200) add(-10, `Large badge collection (${count})`);
+      else add(-5, `Healthy badge count (${count})`);
+      if (count >= 5) {
+        if (p.games === null) missing.push("how many games the badges are from");
+        else if (p.games > 0 && p.games <= 2) add(12, `All badges come from only ${p.games} game(s), a sign of badge farming`);
+        else if (p.games >= 25) add(-5, `Badges from ${p.games} different games`);
+        if (p.burst) add(12, "Most badges were earned within one 24h window");
+        if (age !== null && age > 180 && p.recentOnly && !p.burst) add(10, "Old account that only started earning badges in the last 2 weeks");
+      }
+      if (p.firstBadge && joined !== null && count >= 3) {
+        const first = dayNumber(p.firstBadge);
+        if (first !== null && first - joined > 365) add(6, `First badge earned ${Math.floor((first - joined) / 365)} year(s) after the account was made`);
+      }
+    }
+
+    if (p.friends === null) missing.push("connections");
+    else if (p.friends === 0) add(10, "No connections (friends)");
+    else if (p.friends < 5) add(6, `Very few connections (${p.friends})`);
+    else if (p.friends >= 50) add(-5, `Many connections (${p.friends})`);
+
+    if (p.followers !== null) {
+      if (p.followers >= 1000) add(-10, `${p.followers.toLocaleString()} followers`);
+      else if (p.followers >= 100) add(-5, `${p.followers.toLocaleString()} followers`);
+    }
+    if (p.groupCount === null) missing.push("groups");
+    else if (p.groupCount === 0) add(6, "Not in any groups");
+    else if (p.groupCount >= 5) add(-3, `Member of ${p.groupCount} groups`);
+
+    if (!p.bio.trim()) add(4, "Empty bio");
+    if (/\d{4,}$/.test(p.username)) add(6, "Username ends in a long number (looks auto-generated)");
+    if (p.pastNames.length) add(-4, `Has changed username ${p.pastNames.length} time(s) (costs Robux)`);
+    if (p.premium) add(-10, "Has had Roblox Premium");
+    if (p.legacy > 0) add(-Math.min(12, 4 * p.legacy), `${p.legacy} Roblox achievement badge(s)`);
+
+    const score = Math.max(0, Math.min(100, signals.reduce((s, x) => s + x.points, 0)));
+    const verdict = score >= cfg.altThreshold ? LIKELY_ALT : score >= cfg.suspiciousThreshold ? SUSPICIOUS : LIKELY_MAIN;
+    signals.sort((a, b) => Math.abs(b.points) - Math.abs(a.points));
+    const insufficient = age === null && p.badges === null && !p.badgesHidden;
+    return { score, verdict, signals: signals.filter((s) => s.points !== 0), missing, insufficient };
+  }
+
+  return { DEFAULTS, normalizeTerm, views, compileTerm, buildFilter, scanText, scanFields, scanProfile, altReport, LIKELY_ALT, SUSPICIOUS, LIKELY_MAIN };
+})();
+
+/* Best-effort reader for text copied off a Roblox profile page (used when Claude isn't available). */
+function parseProfileText(text) {
+  const out = {};
+  const lines = String(text).split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const atLine = lines.findIndex((l) => /^@[A-Za-z0-9_]{3,20}$/.test(l));
+  if (atLine >= 0) {
+    out.username = lines[atLine].slice(1);
+    const prev = lines[atLine - 1];
+    if (prev && prev.length <= 40 && !/^(profile|home|about)$/i.test(prev)) out.displayName = prev;
+  } else {
+    const m = String(text).match(/(?:^|\s)@([A-Za-z0-9_]{3,20})\b/);
+    if (m) out.username = m[1];
+  }
+  const NUM = "(\\d[\\d,]*(?:\\.\\d+)?[ \\t]*[KkMm]?)\\+?";
+  const toNum = (s) => {
+    const t = s.replace(/[,\s]/g, "").toUpperCase();
+    const mult = t.endsWith("K") ? 1e3 : t.endsWith("M") ? 1e6 : 1;
+    const n = parseFloat(t);
+    return Number.isFinite(n) ? Math.round(n * mult) : null;
+  };
+  const count = (labels) => {
+    for (const label of labels) {
+      const before = String(text).match(new RegExp(NUM + "[ \\t]*" + label + "\\b", "i")); // "123 Connections" on one line
+      if (before) return toNum(before[1]);
+      const after = String(text).match(new RegExp("\\b" + label + "\\s*[:\\n]?\\s*" + NUM, "i"));
+      if (after) return toNum(after[1]);
+    }
+    return null;
+  };
+  const friends = count(["Connections", "Friends"]);
+  if (friends !== null) out.friends = friends;
+  const followers = count(["Followers"]);
+  if (followers !== null) out.followers = followers;
+  const join = String(text).match(/Join\s*Date\s*[:\n]?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+  if (join) out.joinDate = `${join[3]}-${join[1].padStart(2, "0")}-${join[2].padStart(2, "0")}`;
+  else {
+    const j2 = String(text).match(/Joined\s*[:\n]?\s*([A-Z][a-z]{2,8}\.? \d{1,2},? \d{4})/);
+    if (j2 && !Number.isNaN(Date.parse(j2[1]))) out.joinDate = new Date(Date.parse(j2[1]) - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  }
+  const about = lines.findIndex((l) => /^about$/i.test(l));
+  if (about >= 0) {
+    const STOP = /^(read more|see more|currently wearing|statistics|join date|place visits|connections|friends|followers|following|favorites|badges|roblox badges|player badges|groups|collections|creations|experiences|report abuse)$/i;
+    const bio = [];
+    for (let i = about + 1; i < lines.length && bio.length < 20; i++) {
+      if (STOP.test(lines[i])) break;
+      bio.push(lines[i]);
+    }
+    if (bio.length) out.bio = bio.join("\n");
+  }
+  return out;
+}
+</script>
+
+<script>
+(() => {
+"use strict";
+const $ = (id) => document.getElementById(id);
+const TAB_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
+const DEFAULT_SETTINGS = { altThreshold: 60, suspiciousThreshold: 35, nsfwThreshold: 40 };
+
+/* ------------------------------------------------------------------ state */
+const S = {
+  db: null, user: null, room: null, sample: null, sampleImages: false,
+  meId: null, canWrite: null, canAdmin: false, readOnly: false, live: false, noStore: false,
+  cases: [], notes: [], trusted: new Map(), logDays: [], terms: [],
+  settings: { ...DEFAULT_SETTINGS }, people: {}, peers: [],
+  tab: "check", filter: "open", search: "", selected: null,
+  example: true, pendingImage: null, contentFilter: ENGINE.buildFilter([]),
+};
+
+/* ---------------------------------------------------------------- helpers */
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "text") el.textContent = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "dataset") Object.assign(el.dataset, v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return el;
+}
+const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+function ago(ms) {
+  if (!ms) return "";
+  const s = Math.round((ms - Date.now()) / 1000);
+  const abs = Math.abs(s);
+  if (abs < 45) return "just now";
+  if (abs < 3600) return rtf.format(Math.round(s / 60), "minute");
+  if (abs < 86400) return rtf.format(Math.round(s / 3600), "hour");
+  if (abs < 86400 * 30) return rtf.format(Math.round(s / 86400), "day");
+  return new Date(ms).toLocaleDateString();
+}
+const fullTime = (ms) => (ms ? new Date(ms).toLocaleString() : "");
+const caseNo = (n) => "#" + String(n).padStart(4, "0");
+const sev = (score, mid, high) => (score >= high ? "sev-high" : score >= mid ? "sev-mid" : "sev-low");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let toastTimer;
+function toast(msg, err = false) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "toast show" + (err ? " err" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.className = "toast" + (err ? " err" : "")), err ? 6000 : 3200);
+}
+function person(id) {
+  const p = id ? S.people[id] : null;
+  return { name: (p && p.name) || (id && id === S.meId ? "You" : "Someone"), avatar: p ? p.avatarUrl : null, isMe: !!id && id === S.meId };
+}
+function personName(id) { const p = person(id); return p.isMe ? "you" : p.name; }
+function avatar(id, size = 26) {
+  const p = person(id);
+  return p.avatar ? h("img", { src: p.avatar, alt: "", width: size, height: size }) : h("span", { style: `display:inline-block;width:${size}px;height:${size}px;border-radius:50%;background:var(--line)` });
+}
+class UserError extends Error {}
+function hashBucket(key) { let x = 0; for (const c of key) x = (x * 31 + c.charCodeAt(0)) >>> 0; return "b" + (x % 128); }
+function slug(text) { return String(text).toLowerCase().replace(/[^a-z0-9_.~:@+-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120) || "x"; }
+
+/* ------------------------------------------------------------- the form */
+const F = (id) => $(id);
+const numVal = (id) => { const v = F(id).value.trim(); if (v === "") return null; const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= 0 ? n : null; };
+function readForm() {
+  const groups = F("f-groups").value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const gc = numVal("f-groupcount");
+  return {
+    username: F("f-username").value.trim().replace(/^@/, ""),
+    displayName: F("f-display").value.trim(),
+    bio: F("f-bio").value,
+    pastNames: F("f-past").value.split(/[,\n]/).map((s) => s.trim().replace(/^@/, "")).filter(Boolean),
+    groups,
+    joinDate: F("f-join").value || null,
+    badges: numVal("f-badges"),
+    badgesHidden: F("f-hidden").checked,
+    games: numVal("f-games"),
+    burst: F("f-burst").checked,
+    recentOnly: F("f-recent").checked,
+    firstBadge: F("f-first").value || null,
+    friends: numVal("f-friends"),
+    followers: numVal("f-followers"),
+    groupCount: groups.length ? Math.max(groups.length, gc ?? 0) : gc,
+    verified: F("f-verified").checked,
+    premium: F("f-premium").checked,
+    avatarBlocked: F("f-avatar").checked,
+    legacy: numVal("f-legacy") ?? 0,
+  };
+}
+const FORM_IDS = ["f-username", "f-display", "f-bio", "f-past", "f-groups", "f-join", "f-badges", "f-games", "f-first", "f-friends", "f-followers", "f-groupcount", "f-legacy"];
+const CHECK_IDS = ["f-hidden", "f-burst", "f-recent", "f-verified", "f-premium", "f-avatar"];
+function clearForm() {
+  for (const id of FORM_IDS) F(id).value = "";
+  for (const id of CHECK_IDS) F(id).checked = false;
+  $("case-reason").value = "";
+  S.example = false;
+  computeAndRender();
+}
+function loadExample() {
+  const daysAgo = (d) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
+  F("f-username").value = "example-player";
+  F("f-display").value = "Example player";
+  F("f-bio").value = "";
+  F("f-join").value = daysAgo(9);
+  F("f-badges").value = "3";
+  F("f-games").value = "1";
+  F("f-friends").value = "0";
+  F("f-followers").value = "0";
+  F("f-groupcount").value = "0";
+  S.example = true;
+}
+function fillForm(data) {
+  const filled = [];
+  const set = (id, value, label) => { if (value === undefined || value === null || value === "") return; F(id).value = String(value); filled.push(label); };
+  const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : null);
+  const int = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.round(v) : null);
+  const user = str(data.username, 40)?.replace(/^@/, "");
+  set("f-username", user && USERNAME_RE.test(user) ? user : null, "username");
+  set("f-display", str(data.displayName, 60), "display name");
+  set("f-bio", str(data.bio, 2000), "bio");
+  if (typeof data.joinDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(data.joinDate)) set("f-join", data.joinDate, "join date");
+  set("f-friends", int(data.friends), "connections");
+  set("f-followers", int(data.followers), "followers");
+  set("f-badges", int(data.badgeCount), "badge count");
+  if (Array.isArray(data.groups) && data.groups.length) set("f-groups", data.groups.filter((g) => typeof g === "string").map((g) => g.slice(0, 100)).join("\n"), "groups");
+  if (Array.isArray(data.pastUsernames) && data.pastUsernames.length) set("f-past", data.pastUsernames.filter((g) => typeof g === "string").slice(0, 20).join(", "), "past usernames");
+  if (data.verified === true) { F("f-verified").checked = true; filled.push("verified badge"); }
+  if (filled.length) S.example = false;
+  return filled;
+}
+
+/* ------------------------------------------------------------- scoring */
+let lastCheck = null;
+function computeAndRender() {
+  const p = readForm();
+  const alt = ENGINE.altReport(p, S.settings);
+  const nsfw = ENGINE.scanProfile(S.contentFilter, p, S.settings.nsfwThreshold);
+  lastCheck = { p, alt, nsfw };
+  renderResult();
+  renderCheckActions();
+}
+
+function meter(score, cls) {
+  const on = Math.round(score / 10);
+  return h("div", { class: "studs " + cls, "aria-hidden": "true" }, Array.from({ length: 10 }, (_, i) => h("i", { class: i < on ? "on" : null })));
+}
+function spoiler(text) {
+  const s = h("span", { class: "spoiler", tabindex: "0", role: "button", title: "Click to reveal", "aria-label": "Hidden match, click to reveal", text });
+  const reveal = () => { s.classList.toggle("shown"); };
+  s.addEventListener("click", reveal);
+  s.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); reveal(); } });
+  return s;
+}
+function hitItem(hit) {
+  const where = hit.field ? ` in ${hit.field}` : "";
+  return h("li", null, h("span", { class: "pts up" }, "+" + hit.weight),
+    h("span", null, h("b", { text: hit.label }), where, hit.matched && hit.matched.toLowerCase() !== hit.label.toLowerCase() ? [" ", spoiler(hit.matched)] : null));
+}
+function signalItem(s) {
+  return h("li", null, h("span", { class: "pts " + (s.points > 0 ? "up" : "down") }, (s.points > 0 ? "+" : "") + s.points), h("span", { text: s.label }));
+}
+
+function renderResult() {
+  const { p, alt, nsfw } = lastCheck;
+  const cfg = S.settings;
+  const key = p.username.toLowerCase();
+  const trusted = key ? S.trusted.get(key) : null;
+  const open = key ? S.cases.find((c) => c.key === key && c.status === "open") : null;
+  const altSev = alt.insufficient ? "sev-low" : sev(alt.score, cfg.suspiciousThreshold, cfg.altThreshold);
+  const nsfwSev = nsfw.flagged ? "sev-high" : nsfw.hits.length ? "sev-mid" : "sev-low";
+  const title = p.username ? (p.displayName && p.displayName !== p.username ? p.displayName : p.username) : "No player yet";
+
+  const chips = [];
+  if (S.example) chips.push(h("span", { class: "chip manual" }, "Example"));
+  if (trusted) chips.push(h("span", { class: "chip ok", title: trusted.reason || "" }, "Trusted"));
+  if (open) chips.push(h("span", { class: "chip open" }, "Open case " + caseNo(open.n)));
+  if (alt.score >= cfg.altThreshold) chips.push(h("span", { class: "chip alt" }, "Alt"));
+  if (nsfw.flagged) chips.push(h("span", { class: "chip nsfw" }, "NSFW"));
+
+  const root = $("result");
+  root.replaceChildren(
+    h("div", { class: "result-head" },
+      h("span", { class: "label" }, "Verdict"),
+      h("div", { class: "name", text: title }),
+      p.username ? h("span", { class: "small muted mono", text: "@" + p.username }) : h("span", { class: "small muted" }, "Type a username or paste a profile to start."),
+      chips.length ? h("div", { class: "row" }, chips) : null),
+    h("div", { class: "gauges" },
+      h("div", { class: "gauge" },
+        h("span", { class: "label" }, "Alt score"),
+        h("div", { class: "num" }, String(alt.score), h("small", null, " /100")),
+        meter(alt.score, altSev),
+        h("span", { class: "verdict " + (alt.insufficient ? "muted" : altSev) }, alt.insufficient ? "Not enough info yet" : alt.verdict)),
+      h("div", { class: "gauge" },
+        h("span", { class: "label" }, "NSFW score"),
+        h("div", { class: "num" }, String(nsfw.score), h("small", null, " /100")),
+        meter(nsfw.score, nsfwSev),
+        h("span", { class: "verdict " + nsfwSev }, nsfw.flagged ? "Flagged" : nsfw.hits.length ? "Some matches, below threshold" : "Nothing found"))),
+    h("div", { class: "result-body" },
+      trusted ? h("p", { class: "small" }, h("b", null, "Trusted"), ` by ${personName(trusted.by)}`, trusted.reason ? `: ${trusted.reason}` : "") : null,
+      h("div", { class: "stack", style: "gap:6px" },
+        h("span", { class: "label" }, "Why this alt score"),
+        alt.signals.length ? h("ul", { class: "reasons" }, alt.signals.map(signalItem)) : h("p", { class: "small muted" }, "No signals yet."),
+        alt.missing.length ? h("p", { class: "small muted" }, "Not filled in: " + alt.missing.join(", ") + ". The score only counts what you entered.") : null),
+      nsfw.hits.length ? h("div", { class: "stack", style: "gap:6px" },
+        h("span", { class: "label" }, "NSFW matches"),
+        h("ul", { class: "reasons" }, nsfw.hits.map(hitItem))) : null,
+      h("p", { class: "small muted" }, "Scores are hints, not proof. Review the reasons before acting.")));
+}
+
+function renderCheckActions() {
+  if (!lastCheck) return;
+  const { p, alt, nsfw } = lastCheck;
+  const key = p.username.toLowerCase();
+  const open = key ? S.cases.find((c) => c.key === key && c.status === "open") : null;
+  const valid = USERNAME_RE.test(p.username);
+  const box = $("existing-case");
+  box.replaceChildren();
+  if (open) {
+    const claim = open.claimedBy ? ` · claimed by ${personName(open.claimedBy)}` : " · unclaimed";
+    box.append(h("span", null, "This player already has ", h("b", null, "case " + caseNo(open.n)), claim, " "),
+      h("button", { type: "button", class: "btn ghost sm", onclick: () => selectCase(open.n, true) }, "View case"));
+  }
+  const openBtn = $("open-case");
+  openBtn.textContent = open ? "Update case " + caseNo(open.n) : "Open case";
+  const noStore = !S.db;
+  openBtn.disabled = S.readOnly || noStore || !valid || S.example;
+  $("trust-btn").disabled = S.readOnly || noStore || !valid || S.example || S.trusted.has(key);
+  const flagged = alt.score >= S.settings.altThreshold || nsfw.flagged;
+  let hint = "";
+  if (noStore) hint = S.noStore ? "The shared queue isn't available in this view. Open the page from its claude.ai link while signed in." : "Connecting to the shared queue…";
+  else if (S.readOnly) hint = "You can look, but you need Contributor access to open cases. Ask the page owner.";
+  else if (S.example) hint = "Clear the example first, then check a real player.";
+  else if (!p.username) hint = "Enter the player's username to open a case.";
+  else if (!valid) hint = "Roblox usernames are 3–20 letters, numbers or underscores.";
+  else if (flagged && !open) hint = "This crosses your team's threshold. Open a case so someone reviews it.";
+  else if (!flagged && !open) hint = "Nothing crosses the threshold. You can still open a case if something looks off.";
+  $("action-hint").textContent = hint;
+}
+
+/* --------------------------------------------------------- shared store */
+function describeDbError(e) {
+  const code = e && e.code;
+  if (code === "invalid_argument") return "You don't have permission to change shared data. Ask the page owner for Contributor access.";
+  if (code === "quota_exceeded") return "The shared database is full. Delete old cases or trusted entries to make room.";
+  if (code === "resource_exhausted") return "Too many changes at once. Wait a moment and try again.";
+  if (code === "unavailable") return "Couldn't reach the shared queue. Check your connection and try again.";
+  if (code === "revoked") return "Your access to this page changed. Reload to continue.";
+  return (e && e.message) || "Something went wrong.";
+}
+/* Runs a shared-data change; resolves {ok, value} and shows a toast either way. */
+async function run(task, okMessage) {
+  try {
+    const value = await task();
+    if (okMessage) toast(typeof okMessage === "function" ? okMessage(value) : okMessage);
+    return { ok: true, value };
+  } catch (e) {
+    if (e instanceof UserError) { toast(e.message, true); return { ok: false }; }
+    if (e && e.code === "invalid_argument" && S.canWrite !== true) { S.readOnly = true; applyAccess(); }
+    console.error(e);
+    toast(describeDbError(e), true);
+    return { ok: false };
+  }
+}
+function requireStore() {
+  if (!S.db) throw new UserError("The shared queue isn't connected in this view.");
+  if (S.readOnly) throw new UserError("You need Contributor access to change shared data.");
+}
+
+/* Cooperative locks: a short lease on a bucket document serialises claims and case numbers. */
+async function withLock(key, fn) {
+  const ref = S.db.doc("locks/" + hashBucket(key));
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const r = await ref.acquire({ holder: TAB_ID, ttlMs: 2500 });
+    if (r.acquired) return await fn();
+    await sleep(250 + Math.random() * 350);
+  }
+  throw new UserError("Another moderator is changing this right now. Try again in a moment.");
+}
+
+async function logAction(action, target, details = "") {
+  if (!S.db) return;
+  const day = new Date().toISOString().slice(0, 10);
+  try {
+    await withLock("log-" + day, async () => {
+      const ref = S.db.doc("log/" + day);
+      const snap = await ref.get();
+      const entries = snap.exists && Array.isArray(snap.data().entries) ? snap.data().entries.slice(-1499) : [];
+      entries.push({ actor: S.meId, action, target: String(target).slice(0, 120), details: String(details).slice(0, 300), at: Date.now() });
+      await ref.set({ day, entries });
+    });
+  } catch (e) { console.warn("Could not write to the activity log", e); }
+}
+
+async function nextCaseNumber() {
+  return withLock("counter", async () => {
+    const ref = S.db.doc("meta/counter");
+    const snap = await ref.get();
+    const stored = snap.exists ? Number(snap.data().n) || 0 : 0;
+    const seen = S.cases.reduce((m, c) => Math.max(m, c.n || 0), 0);
+    const n = Math.max(stored, seen) + 1;
+    await ref.set({ n });
+    return n;
+  });
+}
+
+async function openCase() {
+  requireStore();
+  const { p, alt, nsfw } = lastCheck;
+  if (!USERNAME_RE.test(p.username)) throw new UserError("Enter a valid Roblox username first.");
+  const key = p.username.toLowerCase();
+  const note = $("case-reason").value.trim();
+  const reasons = [];
+  if (alt.score >= S.settings.altThreshold) reasons.push("alt");
+  if (nsfw.flagged) reasons.push("nsfw");
+  if (!reasons.length || note) reasons.push("manual");
+  const body = {
+    key, username: p.username, displayName: p.displayName || p.username,
+    altScore: alt.score, altVerdict: alt.verdict, nsfwScore: nsfw.score,
+    signals: alt.signals.slice(0, 10).map((s) => [s.points, s.label]),
+    hits: nsfw.hits.slice(0, 10).map((x) => [x.weight, x.label, x.field, x.matched]),
+    profile: {
+      joinDate: p.joinDate, badges: p.badgesHidden ? "private" : p.badges, games: p.games, friends: p.friends,
+      followers: p.followers, groups: p.groupCount, bio: p.bio.slice(0, 1000), pastNames: p.pastNames.slice(0, 10),
+    },
+  };
+  const result = await withLock("acct-" + key, async () => {
+    const existing = await S.db.collection("cases").where("key", "==", key).where("status", "==", "open").limit(1).get();
+    if (!existing.empty) {
+      const doc = existing.docs[0];
+      const prev = doc.data();
+      const merged = Array.from(new Set([...(prev.reasons || []), ...reasons])).sort();
+      await S.db.doc("cases/" + doc.id).update({ ...body, reasons: merged, updatedAt: Date.now() });
+      return { n: prev.n, created: false };
+    }
+    const n = await nextCaseNumber();
+    await S.db.doc("cases/" + n).set({
+      ...body, n, reasons, status: "open", note: note || null,
+      openedBy: S.meId, openedAt: Date.now(), claimedBy: null, claimedAt: null, resolvedBy: null, resolvedAt: null,
+    });
+    return { n, created: true };
+  });
+  if (note) await S.db.collection("notes").add({ caseN: result.n, author: S.meId, body: note, at: Date.now() });
+  await logAction(result.created ? "opened" : "updated", `case ${caseNo(result.n)} (${p.username})`, reasons.join(", "));
+  $("case-reason").value = "";
+  return result;
+}
+
+async function caseAction(n, action) {
+  requireStore();
+  const ref = S.db.doc("cases/" + n);
+  let target = "";
+  await withLock("case-" + n, async () => {
+    const snap = await ref.get();
+    if (!snap.exists) throw new UserError("That case no longer exists.");
+    const c = snap.data();
+    target = `case ${caseNo(n)} (${c.username})`;
+    const me = S.meId;
+    const closedMsg = () => `Case ${caseNo(n)} was already ${c.status} by ${personName(c.resolvedBy)}.`;
+    const claimedByOther = c.claimedBy && c.claimedBy !== me;
+    if (action === "claim") {
+      if (c.status !== "open") throw new UserError(closedMsg());
+      if (claimedByOther) throw new UserError(`Already claimed by ${personName(c.claimedBy)}.`);
+      await ref.update({ claimedBy: me, claimedAt: Date.now() });
+    } else if (action === "release") {
+      if (!c.claimedBy) throw new UserError("This case isn't claimed.");
+      if (claimedByOther && !S.canAdmin) throw new UserError(`Only ${personName(c.claimedBy)} or an editor can release this claim.`);
+      await ref.update({ claimedBy: null, claimedAt: null });
+    } else if (action === "confirmed" || action === "dismissed") {
+      if (c.status !== "open") throw new UserError(closedMsg());
+      if (claimedByOther && !S.canAdmin) throw new UserError(`${person(c.claimedBy).name} claimed this case. Ask them to finish or release it.`);
+      await ref.update({ status: action, resolvedBy: me, resolvedAt: Date.now() });
+    } else if (action === "reopen") {
+      if (c.status === "open") throw new UserError("This case is already open.");
+      await withLock("acct-" + c.key, async () => {
+        const other = await S.db.collection("cases").where("key", "==", c.key).where("status", "==", "open").limit(1).get();
+        if (!other.empty) throw new UserError(`This player already has open case ${caseNo(other.docs[0].data().n)}.`);
+        await ref.update({ status: "open", claimedBy: null, claimedAt: null, resolvedBy: null, resolvedAt: null });
+      });
+    }
+  });
+  await logAction(action === "claim" ? "claimed" : action === "release" ? "released" : action === "reopen" ? "reopened" : action, target);
+}
+
+async function addNote(n, body) {
+  requireStore();
+  if (!body.trim()) throw new UserError("Write something first.");
+  const c = S.cases.find((x) => x.n === n);
+  await S.db.collection("notes").add({ caseN: n, author: S.meId, body: body.trim().slice(0, 1000), at: Date.now() });
+  await logAction("noted", `case ${caseNo(n)}${c ? ` (${c.username})` : ""}`, body.trim());
+}
+
+async function addTrusted(username, reason) {
+  requireStore();
+  const name = username.trim().replace(/^@/, "");
+  if (!USERNAME_RE.test(name)) throw new UserError("Roblox usernames are 3–20 letters, numbers or underscores.");
+  const key = name.toLowerCase();
+  await S.db.doc("trusted/" + key).set({ key, username: name, reason: reason.trim().slice(0, 300) || null, by: S.meId, at: Date.now() });
+  await logAction("trusted", name, reason.trim());
+}
+async function removeTrusted(key, username) {
+  requireStore();
+  await S.db.doc("trusted/" + key).delete();
+  await logAction("untrusted", username);
+}
+
+async function setTerm(term, weight, match, category) {
+  requireStore();
+  await S.db.doc("terms/" + slug(term)).set({ term, weight, match, category, by: S.meId, at: Date.now() });
+  await logAction(weight > 0 ? "set filter word" : "switched off", term, weight > 0 ? `${weight} points, ${match}` : "");
+}
+async function removeTerm(t) {
+  requireStore();
+  await S.db.doc("terms/" + slug(t.term)).delete();
+  await logAction("reset filter word", t.term);
+}
+async function saveThresholds() {
+  requireStore();
+  if (!S.canAdmin) throw new UserError("Only the owner or editors can change thresholds.");
+  const alt = Number($("thr-alt").value), sus = Number($("thr-sus").value), nsfw = Number($("thr-nsfw").value);
+  for (const v of [alt, sus, nsfw]) if (!Number.isInteger(v) || v < 1 || v > 100) throw new UserError("Thresholds are whole numbers from 1 to 100.");
+  if (sus >= alt) throw new UserError("Suspicious has to be lower than Likely alt.");
+  await S.db.doc("settings/main").set({ altThreshold: alt, suspiciousThreshold: sus, nsfwThreshold: nsfw });
+  await logAction("changed thresholds", `alt ${alt}, suspicious ${sus}, nsfw ${nsfw}`);
+}
+
+/* ------------------------------------------------------------------ queue */
+function caseState(c) { return c.status === "open" ? (c.claimedBy ? "claimed" : "open") : c.status; }
+function filteredCases() {
+  const q = S.search.trim().toLowerCase().replace(/^#0*/, "");
+  return S.cases.filter((c) => {
+    if (S.filter === "open" && c.status !== "open") return false;
+    if (S.filter === "unclaimed" && !(c.status === "open" && !c.claimedBy)) return false;
+    if (S.filter === "mine" && !(c.status === "open" && c.claimedBy && c.claimedBy === S.meId)) return false;
+    if (S.filter === "confirmed" && c.status !== "confirmed") return false;
+    if (S.filter === "dismissed" && c.status !== "dismissed") return false;
+    if (q && !(String(c.n) === q || String(c.n).startsWith(q) || (c.username || "").toLowerCase().includes(q) || (c.displayName || "").toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+function viewersOf(n) {
+  const seen = new Set();
+  return S.peers.filter((p) => !p.sameTab && p.presence && p.presence.caseN === n && p.presence.tab === "queue").filter((p) => {
+    const id = p.by || p.presence.uid || p.peer;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+function reasonChips(reasons) {
+  return (reasons || []).map((r) => h("span", { class: "chip " + r }, r === "manual" ? "Manual" : r.toUpperCase()));
+}
+function renderQueue() {
+  const list = $("case-list");
+  for (const b of $("queue-filter").querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.filter === S.filter));
+  const rows = filteredCases();
+  if (!S.db) {
+    list.replaceChildren(h("div", { class: "empty" }, h("h3", null, S.noStore ? "Shared queue unavailable here" : "Connecting…"),
+      h("p", null, S.noStore ? "Open this page from its claude.ai link while signed in to see and work on your team's cases." : "Loading your team's cases.")));
+  } else if (!rows.length) {
+    const none = !S.cases.length;
+    list.replaceChildren(h("div", { class: "empty" },
+      h("h3", null, none ? "No cases yet" : "Nothing in this view"),
+      h("p", null, none ? "Check a player and press Open case. It shows up here for the whole team, live." : "Try another filter, or clear the search.")));
+  } else {
+    list.replaceChildren(...rows.map((c) => {
+      const st = caseState(c);
+      const watchers = viewersOf(c.n);
+      const noteCount = S.notes.filter((x) => x.caseN === c.n).length;
+      return h("button", { type: "button", class: "caserow st-" + st, "aria-current": String(S.selected === c.n), onclick: () => selectCase(c.n) },
+        h("span", { class: "stripe" }),
+        h("span", { class: "caseno" }, caseNo(c.n)),
+        h("span", { class: "casemain" },
+          h("strong", { text: c.username }),
+          h("span", { class: "row", style: "gap:6px" }, reasonChips(c.reasons),
+            h("span", { class: "mini" }, `A ${c.altScore ?? "–"} · N ${c.nsfwScore ?? "–"}`))),
+        h("span", { class: "casemeta" },
+          h("span", { title: fullTime(c.openedAt) }, ago(c.openedAt)),
+          st === "claimed" ? h("span", null, "👀 " + personName(c.claimedBy)) : st === "open" ? h("span", null, "Unclaimed") : h("span", null, (c.status === "confirmed" ? "Confirmed" : "Dismissed") + " by " + personName(c.resolvedBy)),
+          noteCount ? h("span", null, `${noteCount} note${noteCount === 1 ? "" : "s"}`) : null,
+          watchers.length ? h("span", { class: "viewing" }, watchers.slice(0, 3).map((w) => avatar(w.by || w.presence.uid, 18)), "viewing") : null));
+    }));
+  }
+  renderCaseFile();
+}
+
+function selectCase(n, switchTab = false) {
+  if (S.selected !== n) $("note-text").value = "";
+  S.selected = n;
+  if (switchTab) setTab("queue");
+  if (S.room) S.room.presence({ tab: S.tab, caseN: n, uid: S.meId }).catch(() => {});
+  renderQueue();
+  if (window.matchMedia("(max-width: 960px)").matches) $("case-file").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderCaseFile() {
+  const main = $("cf-main");
+  const c = S.cases.find((x) => x.n === S.selected);
+  $("cf-composer").hidden = !c;
+  if (!c) {
+    main.replaceChildren(h("div", { class: "empty" }, h("h3", null, "Pick a case"),
+      h("p", null, "Claim it so the team knows you're on it, add notes as you look into the player, then confirm or dismiss.")));
+    return;
+  }
+  const st = caseState(c);
+  const me = S.meId;
+  const mineClaim = c.claimedBy && c.claimedBy === me;
+  const blocked = c.claimedBy && !mineClaim && !S.canAdmin;
+  const done = { claim: "You claimed", release: "Released", confirmed: "Confirmed", dismissed: "Dismissed", reopen: "Reopened" };
+  const btn = (label, cls, action, disabled) => h("button", { type: "button", class: "btn sm " + cls, disabled: disabled || S.readOnly || !S.db, onclick: () => run(() => caseAction(c.n, action), `${done[action]} case ${caseNo(c.n)}`) }, label);
+  const actions = c.status === "open"
+    ? [c.claimedBy ? btn("Release claim", "", "release", !mineClaim && !S.canAdmin) : btn("Claim", "primary", "claim", false),
+       btn("Confirm", "danger", "confirmed", blocked), btn("Dismiss", "", "dismissed", blocked)]
+    : [btn("Reopen", "", "reopen", false)];
+  const watchers = viewersOf(c.n);
+  const pf = c.profile || {};
+  const fact = (label, value) => h("div", { class: "fact" }, h("span", { class: "label" }, label), h("b", { text: value === null || value === undefined || value === "" ? "–" : String(value) }));
+  const timeline = [h("li", null, `Opened by ${personName(c.openedBy)} `, h("span", { class: "muted", title: fullTime(c.openedAt) }, ago(c.openedAt)))];
+  if (c.updatedAt) timeline.push(h("li", null, "Scores updated ", h("span", { class: "muted", title: fullTime(c.updatedAt) }, ago(c.updatedAt))));
+  if (c.claimedBy) timeline.push(h("li", null, `Claimed by ${personName(c.claimedBy)} `, h("span", { class: "muted", title: fullTime(c.claimedAt) }, ago(c.claimedAt))));
+  if (c.resolvedBy) timeline.push(h("li", null, `${c.status === "confirmed" ? "Confirmed" : "Dismissed"} by ${personName(c.resolvedBy)} `, h("span", { class: "muted", title: fullTime(c.resolvedAt) }, ago(c.resolvedAt))));
+  const notes = S.notes.filter((x) => x.caseN === c.n).sort((a, b) => a.at - b.at);
+
+  main.replaceChildren(
+    h("div", { class: "cf-head" },
+      h("div", { class: "cf-title" },
+        h("div", { class: "stack", style: "gap:4px;min-width:0" },
+          h("span", { class: "caseno" }, caseNo(c.n)),
+          h("h2", { text: c.displayName && c.displayName !== c.username ? `${c.displayName} (@${c.username})` : c.username })),
+        h("span", { class: "stamp " + st }, st === "claimed" ? "Claimed" : st)),
+      h("div", { class: "row" }, reasonChips(c.reasons),
+        watchers.length ? h("span", { class: "viewing" }, watchers.slice(0, 4).map((w) => avatar(w.by || w.presence.uid, 18)), `${watchers.map((w) => personName(w.by || w.presence.uid)).slice(0, 3).join(", ")} viewing`) : null),
+      h("div", { class: "row" }, actions,
+        h("a", { class: "btn sm ghost", href: "https://www.roblox.com/search/users?keyword=" + encodeURIComponent(c.username), target: "_blank", rel: "noopener" }, "Find on Roblox ↗")),
+      blocked && c.status === "open" ? h("p", { class: "small muted" }, `${person(c.claimedBy).name} is handling this case. Add a note if you have something to share.`) : null),
+    h("div", { class: "cf-body" },
+      h("div", { class: "gauges", style: "padding:0" },
+        h("div", { class: "gauge" }, h("span", { class: "label" }, "Alt score"), h("div", { class: "num" }, String(c.altScore ?? 0), h("small", null, " /100")),
+          meter(c.altScore || 0, sev(c.altScore || 0, S.settings.suspiciousThreshold, S.settings.altThreshold)), h("span", { class: "small muted" }, c.altVerdict || "")),
+        h("div", { class: "gauge" }, h("span", { class: "label" }, "NSFW score"), h("div", { class: "num" }, String(c.nsfwScore ?? 0), h("small", null, " /100")),
+          meter(c.nsfwScore || 0, (c.nsfwScore || 0) >= S.settings.nsfwThreshold ? "sev-high" : (c.hits || []).length ? "sev-mid" : "sev-low"), h("span", { class: "small muted" }, (c.hits || []).length ? `${c.hits.length} match(es)` : "No matches"))),
+      h("div", { class: "facts" },
+        fact("Joined", pf.joinDate), fact("Badges", pf.badges), fact("Games", pf.games),
+        fact("Connections", pf.friends), fact("Followers", pf.followers), fact("Groups", pf.groups)),
+      (c.signals || []).length ? h("div", { class: "stack", style: "gap:6px" }, h("span", { class: "label" }, "Alt signals"),
+        h("ul", { class: "reasons" }, c.signals.map(([points, label]) => signalItem({ points, label })))) : null,
+      (c.hits || []).length ? h("div", { class: "stack", style: "gap:6px" }, h("span", { class: "label" }, "NSFW matches"),
+        h("ul", { class: "reasons" }, c.hits.map(([weight, label, field, matched]) => hitItem({ weight, label, field, matched })))) : null,
+      pf.bio ? h("div", { class: "stack", style: "gap:6px" }, h("span", { class: "label" }, "Bio"), (c.hits || []).length ? h("p", null, spoiler(pf.bio)) : h("p", { style: "white-space:pre-wrap;overflow-wrap:anywhere", text: pf.bio })) : null,
+      h("div", { class: "stack", style: "gap:6px" }, h("span", { class: "label" }, "History"), h("ul", { class: "timeline" }, timeline)),
+      h("div", { class: "stack", style: "gap:10px" }, h("span", { class: "label" }, `Notes (${notes.length})`),
+        notes.length ? h("div", { class: "notes" }, notes.map((x) => h("div", { class: "note" }, avatar(x.author, 28),
+          h("div", null, h("div", { class: "small" }, h("b", { text: person(x.author).name }), " ", h("span", { class: "muted", title: fullTime(x.at) }, ago(x.at))),
+            h("div", { class: "body", text: x.body }))))) : h("p", { class: "small muted" }, "No notes yet."))));
+}
+
+/* --------------------------------------------------------------- trusted */
+function renderTrusted() {
+  const list = $("trusted-list");
+  const rows = [...S.trusted.values()].sort((a, b) => (b.at || 0) - (a.at || 0));
+  $("count-trusted").textContent = String(rows.length);
+  if (!rows.length) {
+    list.replaceChildren(h("li", { class: "empty", style: "border:0" }, h("h3", null, "No trusted accounts"), h("p", null, "Add accounts your team has checked and cleared, like a friend's new account or a staff alt.")));
+    return;
+  }
+  list.replaceChildren(...rows.map((t) => h("li", null,
+    h("div", { class: "grow" }, h("b", { text: t.username }),
+      h("span", { class: "small muted" }, `By ${personName(t.by)} · ${ago(t.at)}`, t.reason ? ` · ${t.reason}` : "")),
+    h("button", { type: "button", class: "btn sm ghost", disabled: S.readOnly || !S.db, onclick: () => run(() => removeTrusted(t.key, t.username), "Removed from trusted") }, "Remove"))));
+}
+
+/* -------------------------------------------------------------- activity */
+function renderActivity() {
+  const entries = S.logDays.flatMap((d) => d.entries || []).sort((a, b) => b.at - a.at);
+  const month = Date.now() - 30 * 86400000;
+  const open = S.cases.filter((c) => c.status === "open");
+  const stats = [
+    ["Open cases", open.length], ["Unclaimed", open.filter((c) => !c.claimedBy).length],
+    ["Confirmed", S.cases.filter((c) => c.status === "confirmed").length], ["Dismissed", S.cases.filter((c) => c.status === "dismissed").length],
+  ];
+  $("stats").replaceChildren(...stats.map(([label, n]) => h("div", { class: "stat" }, h("b", null, String(n)), h("span", { class: "label" }, label))));
+
+  const mods = new Map();
+  const bump = (id, field) => { if (!id) return; const m = mods.get(id) || { resolved: 0, claimed: 0, notes: 0, opened: 0 }; m[field]++; mods.set(id, m); };
+  for (const c of S.cases) {
+    if (c.resolvedBy && c.resolvedAt >= month) bump(c.resolvedBy, "resolved");
+    if (c.status === "open" && c.claimedBy) bump(c.claimedBy, "claimed");
+    if (c.openedBy && c.openedAt >= month) bump(c.openedBy, "opened");
+  }
+  for (const n of S.notes) if (n.at >= month) bump(n.author, "notes");
+  const modRows = [...mods.entries()].sort((a, b) => b[1].resolved - a[1].resolved || b[1].claimed - a[1].claimed);
+  $("mod-table").replaceChildren(
+    h("thead", null, h("tr", null, h("th", null, "Moderator"), h("th", { class: "n" }, "Resolved"), h("th", { class: "n" }, "Claimed now"), h("th", { class: "n" }, "Opened"), h("th", { class: "n" }, "Notes"))),
+    h("tbody", null, modRows.length ? modRows.map(([id, m]) => h("tr", null,
+      h("td", null, h("span", { class: "row", style: "gap:8px;flex-wrap:nowrap" }, avatar(id, 22), h("span", { text: person(id).name }))),
+      h("td", { class: "n" }, String(m.resolved)), h("td", { class: "n" }, String(m.claimed)), h("td", { class: "n" }, String(m.opened)), h("td", { class: "n" }, String(m.notes))))
+      : h("tr", null, h("td", { colspan: "5", class: "muted" }, "No moderator activity yet."))));
+
+  $("log-list").replaceChildren(...(entries.length ? entries.slice(0, 80).map((e) => h("div", { class: "logline" }, avatar(e.actor, 26),
+    h("div", { style: "min-width:0;overflow-wrap:anywhere" }, h("b", { text: person(e.actor).name }), " ", e.action, " ", h("span", { text: e.target }),
+      e.details ? h("div", { class: "small muted", text: e.details }) : null),
+    h("span", { class: "small muted", title: fullTime(e.at) }, ago(e.at)))) : [h("div", { class: "empty" }, h("p", null, "Every claim, decision and note shows up here."))]));
+}
+
+/* -------------------------------------------------------------- settings */
+function renderSettings() {
+  const s = S.settings;
+  for (const [id, v] of [["thr-alt", s.altThreshold], ["thr-sus", s.suspiciousThreshold], ["thr-nsfw", s.nsfwThreshold]]) {
+    if (document.activeElement !== $(id)) $(id).value = String(v);
+    $(id).disabled = !S.canAdmin || !S.db;
+  }
+  $("thr-save").disabled = !S.canAdmin || !S.db;
+  $("thr-note").textContent = S.canAdmin ? "" : "Only the owner or editors can change these.";
+  $("thr-inline").textContent = String(s.nsfwThreshold);
+
+  const builtins = ENGINE.buildFilter([]).rules.map((r) => r.label);
+  const off = new Set(S.terms.filter((t) => !(t.weight > 0)).map((t) => String(t.term).toLowerCase()));
+  const sel = $("term-disable");
+  const prev = sel.value;
+  sel.replaceChildren(...builtins.filter((l) => !off.has(l.toLowerCase())).sort((a, b) => a.localeCompare(b)).map((l) => h("option", { value: l, text: l })));
+  if (prev) sel.value = prev;
+
+  const list = $("term-list");
+  const rows = [...S.terms].sort((a, b) => String(a.term).localeCompare(String(b.term)));
+  list.replaceChildren(...(rows.length ? rows.map((t) => h("li", null,
+    h("div", { class: "grow" }, h("b", { class: "mono", text: t.term }),
+      h("span", { class: "small muted" }, (t.weight > 0 ? `${t.weight} points · ${t.match === "prefix" ? "start of a word" : t.match === "substring" ? "anywhere" : "whole word"}` : "Switched off") + ` · ${personName(t.by)} · ${ago(t.at)}`)),
+    h("button", { type: "button", class: "btn sm ghost", disabled: S.readOnly || !S.db, onclick: () => run(() => removeTerm(t), "Back to the default") }, t.weight > 0 ? "Remove" : "Switch back on")))
+    : [h("li", { class: "small muted" }, "No changes yet. The built-in list is in use.")]));
+  renderFilterTest();
+}
+function renderFilterTest() {
+  const text = $("test-text").value;
+  const out = $("test-result");
+  if (!text.trim()) { out.replaceChildren(h("span", { class: "muted" }, "Matches show up here as you type.")); return; }
+  const report = ENGINE.scanFields(S.contentFilter, [["description", text]], S.settings.nsfwThreshold);
+  out.replaceChildren(
+    h("p", null, h("b", null, `Score ${report.score}/100`), report.flagged ? " · would be flagged" : " · not flagged"),
+    report.hits.length ? h("ul", { class: "reasons" }, report.hits.map((x) => hitItem({ ...x, field: "" }))) : h("p", { class: "muted" }, "No matches."));
+}
+
+/* ----------------------------------------------------------- page frame */
+function setTab(tab) {
+  S.tab = tab;
+  for (const b of document.querySelectorAll(".tab")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+  for (const id of ["check", "queue", "trusted", "activity", "settings"]) $("tab-" + id).hidden = id !== tab;
+  try { history.replaceState(null, "", "#" + tab); } catch (_) { /* not allowed in every viewer */ }
+  try { localStorage.setItem("rc-tab", tab); } catch (_) { /* storage may be blocked */ }
+  if (S.room) S.room.presence({ tab, caseN: tab === "queue" ? S.selected : null, uid: S.meId }).catch(() => {});
+  renderAll();
+}
+function applyAccess() {
+  const banner = $("access-banner");
+  if (S.noStore) {
+    banner.hidden = false;
+    banner.replaceChildren(h("span", null, h("b", null, "Checking works, but the shared queue doesn't here."), " Open this page from its claude.ai link while signed in to work on cases with your team."));
+  } else if (S.readOnly) {
+    banner.hidden = false;
+    banner.replaceChildren(h("span", null, h("b", null, "View only."), " You can check players and read the queue. Ask the page owner to share it with you as a Contributor to claim and resolve cases."));
+  } else banner.hidden = true;
+  for (const el of document.querySelectorAll("[data-needs-write]")) if (S.readOnly || !S.db) el.disabled = true;
+  renderAll();
+}
+function renderHeader() {
+  const open = S.cases.filter((c) => c.status === "open");
+  const unclaimed = open.filter((c) => !c.claimedBy).length;
+  const cnt = $("count-open");
+  cnt.textContent = String(open.length);
+  cnt.className = "count" + (unclaimed ? " hot" : "");
+  cnt.title = `${unclaimed} unclaimed`;
+  const conn = $("conn");
+  conn.className = "conn " + (S.live ? "live" : S.noStore ? "off" : "");
+  conn.textContent = S.live ? "Live" : S.noStore ? "Offline copy" : "Connecting…";
+  const people = new Map();
+  for (const p of S.peers) { if (p.kind !== "viewer") continue; const id = p.by || p.presence?.uid || p.peer; if (!people.has(id)) people.set(id, p); }
+  const list = [...people.keys()];
+  $("online-avatars").replaceChildren(...list.slice(0, 5).map((id) => { const a = avatar(id, 26); a.title = personName(id); return a; }));
+  $("online-text").textContent = list.length > 1 ? `${list.length} here now` : "";
+}
+let renderQueued = false;
+function renderAll() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    renderHeader();
+    if (lastCheck) { renderResult(); renderCheckActions(); }
+    if (S.tab === "queue") renderQueue();
+    if (S.tab === "trusted") renderTrusted();
+    else $("count-trusted").textContent = String(S.trusted.size);
+    if (S.tab === "activity") renderActivity();
+    if (S.tab === "settings") renderSettings();
+  });
+}
+
+/* People: resolve every id on screen to a name and avatar, as this viewer sees them. */
+let peopleTimer = null;
+function refreshPeople() {
+  if (!S.user || peopleTimer) return;
+  peopleTimer = setTimeout(async () => {
+    peopleTimer = null;
+    const ids = new Set();
+    for (const c of S.cases) for (const k of ["openedBy", "claimedBy", "resolvedBy"]) if (c[k]) ids.add(c[k]);
+    for (const n of S.notes) if (n.author) ids.add(n.author);
+    for (const t of S.trusted.values()) if (t.by) ids.add(t.by);
+    for (const t of S.terms) if (t.by) ids.add(t.by);
+    for (const d of S.logDays) for (const e of d.entries || []) if (e.actor) ids.add(e.actor);
+    for (const p of S.peers) { if (p.by) ids.add(p.by); else if (p.presence && typeof p.presence.uid === "string") ids.add(p.presence.uid); }
+    if (S.meId) ids.add(S.meId);
+    if (!ids.size) return;
+    try { S.people = await S.user.profiles([...ids]); } catch (_) { /* reads never reject, but stay safe */ }
+    renderAll();
+  }, 60);
+}
+
+/* ------------------------------------------------------------ fill-in */
+async function fillFromPaste() {
+  const text = $("paste-text").value.trim();
+  const image = S.pendingImage;
+  const status = $("paste-status");
+  if (!text && !image) { status.textContent = "Paste the profile text or a screenshot first."; return; }
+  const btn = $("paste-fill");
+  btn.disabled = true;
+  status.textContent = S.sample ? "Reading the profile…" : "";
+  let data = null, how = "";
+  if (S.sample) {
+    const prompt = [
+      "A Roblox community moderator copied a player's Roblox profile page. Copy the facts it shows into JSON for a moderation form.",
+      "Reply with only one JSON object with exactly these keys, using null for anything not shown. Copy text exactly; never guess or invent.",
+      '{"username": "name without @", "displayName": "string", "bio": "the About text", "joinDate": "YYYY-MM-DD", "friends": 0, "followers": 0, "badgeCount": 0, "groups": ["group name"], "pastUsernames": ["name"], "verified": false}',
+      "friends is the Friends or Connections count. Turn 1.2K into 1200. Dates on Roblox are month/day/year. verified is true only if the Roblox verified checkmark is visible next to the name.",
+      text ? "Profile page text:\n\"\"\"\n" + text.slice(0, 20000) + "\n\"\"\"" : "The profile is in the attached screenshot.",
+    ].join("\n\n");
+    try {
+      const opts = { modelTier: "quick" };
+      if (image && S.sampleImages) opts.images = [image];
+      data = await S.sample.json(prompt, opts);
+      how = "Read by Claude";
+    } catch (e) {
+      const code = e && e.code;
+      if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(code)) S.sample = null;
+      if (code === "rate_limited") status.textContent = "Claude is busy for you right now. Using basic reading instead.";
+      data = null;
+    }
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    if (!text) { status.textContent = "Reading screenshots needs permission to use Claude. Paste the profile text instead."; btn.disabled = false; return; }
+    data = parseProfileText(text);
+    how = "Read with pattern matching";
+  }
+  const filled = fillForm(data);
+  status.textContent = filled.length ? `${how}: filled ${filled.join(", ")}. Check the fields, then fill in anything missing.` : "Couldn't find profile details in that. Fill the form in by hand.";
+  btn.disabled = false;
+  computeAndRender();
+}
+function setPendingImage(file) {
+  if (!file || !S.sampleImages) return false;
+  S.pendingImage = file;
+  const url = URL.createObjectURL(file);
+  const thumb = $("paste-thumb");
+  thumb.hidden = false;
+  thumb.replaceChildren(h("img", { src: url, alt: "Screenshot to read" }), h("span", null, file.name || "Screenshot"),
+    h("button", { type: "button", class: "btn ghost sm", onclick: () => { S.pendingImage = null; thumb.hidden = true; thumb.replaceChildren(); } }, "Remove"));
+  return true;
+}
+
+/* ---------------------------------------------------------- wire events */
+function wire() {
+  for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
+  const form = $("check-form");
+  form.addEventListener("submit", (e) => e.preventDefault());
+  form.addEventListener("input", (e) => {
+    if (e.target && e.target.id === "paste-text") return;
+    S.example = false;
+    computeAndRender();
+  });
+  $("clear-form").addEventListener("click", clearForm);
+  $("paste-fill").addEventListener("click", fillFromPaste);
+  const zone = $("paste-zone");
+  zone.addEventListener("paste", (e) => {
+    const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith("image/"));
+    if (file && setPendingImage(file)) { e.preventDefault(); $("paste-status").textContent = "Screenshot added. Press Fill in the form."; }
+  });
+  zone.addEventListener("dragover", (e) => { if (S.sampleImages) { e.preventDefault(); zone.classList.add("drag"); } });
+  zone.addEventListener("dragleave", () => zone.classList.remove("drag"));
+  zone.addEventListener("drop", (e) => {
+    zone.classList.remove("drag");
+    const file = [...(e.dataTransfer?.files || [])].find((f) => f.type.startsWith("image/"));
+    if (file && setPendingImage(file)) { e.preventDefault(); $("paste-status").textContent = "Screenshot added. Press Fill in the form."; }
+  });
+  $("open-case").addEventListener("click", async () => {
+    const btn = $("open-case");
+    btn.disabled = true;
+    const r = await run(openCase, (res) => (res.created ? `Opened case ${caseNo(res.n)}` : `Updated case ${caseNo(res.n)}`));
+    btn.disabled = false;
+    if (r.ok) S.selected = r.value.n;
+    renderAll();
+  });
+  $("trust-btn").addEventListener("click", () => {
+    const { p } = lastCheck;
+    run(() => addTrusted(p.username, $("case-reason").value), `${p.username} is now trusted`);
+  });
+  $("queue-filter").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-filter]");
+    if (!b) return;
+    S.filter = b.dataset.filter;
+    try { localStorage.setItem("rc-filter", S.filter); } catch (_) { /* optional */ }
+    renderQueue();
+  });
+  $("queue-search").addEventListener("input", (e) => { S.search = e.target.value; renderQueue(); });
+  $("note-send").addEventListener("click", async () => {
+    if (S.selected === null) return;
+    const r = await run(() => addNote(S.selected, $("note-text").value), "Note posted");
+    if (r.ok) $("note-text").value = "";
+  });
+  $("t-add").addEventListener("click", async () => {
+    const name = $("t-username").value;
+    const r = await run(() => addTrusted(name, $("t-reason").value), `${name.trim()} is now trusted`);
+    if (r.ok) { $("t-username").value = ""; $("t-reason").value = ""; }
+  });
+  $("term-add").addEventListener("click", async () => {
+    const term = ENGINE.normalizeTerm($("term-text").value);
+    const weight = Math.round(Number($("term-weight").value));
+    const r = await run(async () => {
+      if (!term) throw new UserError("Use 2–50 letters and spaces. Number and symbol tricks are handled for you.");
+      if (!(weight >= 1 && weight <= 100)) throw new UserError("Points are a whole number from 1 to 100.");
+      await setTerm(term, weight, $("term-match").value, "custom");
+    }, `Added “${term}”`);
+    if (r.ok) $("term-text").value = "";
+  });
+  $("term-disable-btn").addEventListener("click", () => {
+    const label = $("term-disable").value;
+    if (!label) return;
+    const key = ENGINE.normalizeTerm(label) || label.toLowerCase();
+    run(() => setTerm(key, 0, "word", "disabled"), `Switched off “${label}”`);
+  });
+  $("thr-save").addEventListener("click", () => run(saveThresholds, "Thresholds saved"));
+  $("test-text").addEventListener("input", renderFilterTest);
+  setInterval(renderAll, 60000); // keep "5 minutes ago" labels fresh
+}
+
+/* --------------------------------------------------------- capabilities */
+function rebuildFilter() {
+  S.contentFilter = ENGINE.buildFilter(S.terms.map((t) => ({ term: t.term, weight: Number(t.weight) || 0, match: t.match, category: t.category })));
+  computeAndRender();
+}
+function subscribe(db) {
+  const onErr = (what) => (e) => { console.warn(what, e); if (e && e.code === "revoked") { S.live = false; renderAll(); } };
+  db.collection("cases").orderBy("n", "desc").limit(1000).onSnapshot((snap) => {
+    S.cases = snap.docs.map((d) => d.data()).filter((c) => c && typeof c.n === "number");
+    S.live = true;
+    refreshPeople();
+    renderAll();
+  }, onErr("cases"));
+  db.collection("notes").orderBy("at", "desc").limit(1000).onSnapshot((snap) => {
+    S.notes = snap.docs.map((d) => d.data()).filter((n) => n && typeof n.caseN === "number" && typeof n.body === "string");
+    refreshPeople();
+    renderAll();
+  }, onErr("notes"));
+  db.collection("trusted").limit(1000).onSnapshot((snap) => {
+    S.trusted = new Map(snap.docs.map((d) => d.data()).filter((t) => t && t.key).map((t) => [t.key, t]));
+    refreshPeople();
+    renderAll();
+  }, onErr("trusted"));
+  db.collection("log").orderBy("day", "desc").limit(30).onSnapshot((snap) => {
+    S.logDays = snap.docs.map((d) => d.data()).filter(Boolean);
+    refreshPeople();
+    renderAll();
+  }, onErr("log"));
+  db.collection("terms").limit(500).onSnapshot((snap) => {
+    S.terms = snap.docs.map((d) => d.data()).filter((t) => t && typeof t.term === "string");
+    rebuildFilter();
+    refreshPeople();
+    renderAll();
+  }, onErr("terms"));
+  db.doc("settings/main").onSnapshot((snap) => {
+    const d = snap.exists ? snap.data() : {};
+    S.settings = {
+      altThreshold: Number(d.altThreshold) || DEFAULT_SETTINGS.altThreshold,
+      suspiciousThreshold: Number(d.suspiciousThreshold) || DEFAULT_SETTINGS.suspiciousThreshold,
+      nsfwThreshold: Number(d.nsfwThreshold) || DEFAULT_SETTINGS.nsfwThreshold,
+    };
+    computeAndRender();
+    renderAll();
+  }, onErr("settings"));
+}
+
+async function connect() {
+  const use = window.claude && typeof window.claude.use === "function" ? (name) => window.claude.use(name).catch(() => null) : async () => null;
+  const [db, user, room, sample] = await Promise.all([use("db"), use("user"), use("room"), use("sample")]);
+  S.user = user;
+  if (user) {
+    S.meId = await user.id();
+    S.canAdmin = await user.canEdit();
+    S.canWrite = await user.can("data.write");
+    if (S.canWrite === false) S.readOnly = true;
+  }
+  if (sample) {
+    S.sample = sample;
+    try { const lim = await sample.limits(); S.sampleImages = !!(lim && lim.images); } catch (_) { S.sampleImages = false; }
+    $("paste-help").textContent = S.sampleImages
+      ? "Paste the profile page text (select all on the Roblox profile, copy, paste), or paste or drop a screenshot. Claude reads it into the form."
+      : "Open the player's Roblox profile, select all (Ctrl+A), copy, and paste here. Claude reads it into the form.";
+  }
+  if (db) { S.db = db; subscribe(db); }
+  else S.noStore = true;
+  if (room) {
+    S.room = room;
+    room.onPeers((change) => { S.peers = change.peers; refreshPeople(); renderAll(); }, () => {});
+    room.presence({ tab: S.tab, caseN: S.tab === "queue" ? S.selected : null, uid: S.meId }).catch(() => {});
+  }
+  refreshPeople();
+  applyAccess();
+}
+
+/* ------------------------------------------------------------------ boot */
+function boot() {
+  wire();
+  loadExample();
+  try {
+    const f = localStorage.getItem("rc-filter");
+    if (f) S.filter = f;
+  } catch (_) { /* optional */ }
+  let tab = (location.hash || "").replace("#", "");
+  if (!["check", "queue", "trusted", "activity", "settings"].includes(tab)) {
+    try { tab = localStorage.getItem("rc-tab") || "check"; } catch (_) { tab = "check"; }
+  }
+  computeAndRender();
+  setTab(["check", "queue", "trusted", "activity", "settings"].includes(tab) ? tab : "check");
+  connect();
+}
+boot();
+})();
+</script>

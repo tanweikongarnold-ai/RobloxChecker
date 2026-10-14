@@ -24,6 +24,7 @@ def labels(cf, text, field="description"):
         ("s.e.x", "sex"),
         ("s*x", "sex"),
         ("s\u0435x", "sex"),  # Cyrillic e
+        ("S\u0415X", "sex"),  # capital Cyrillic E
         ("s\u200bex", "sex"),  # zero-width space
         ("hornyyyy", "horny"),
         ("p0rn", "porn"),

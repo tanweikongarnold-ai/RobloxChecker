@@ -11,6 +11,19 @@ A Discord bot for moderation teams that:
 
 ---
 
+## Web version (no Discord needed)
+
+[`web/robloxchecker.html`](web/robloxchecker.html) is a browser version of the moderation desk, published as a claude.ai page:
+**https://claude.ai/artifact/ALU75BJcokkbg8QZEMbbkE**
+
+- **Check a player**: the same alt score and NSFW filter as the bot, worked out in the browser as you type. Pages hosted on claude.ai can't contact Roblox, so you enter the player's details yourself. To save typing, paste the profile page text (or a screenshot) and Claude fills the form in for you.
+- **Review queue**: a shared, live list of cases. Claim, confirm, dismiss, reopen and leave notes. Two people can't claim the same case, and you can see who else is looking at a case right now.
+- **Trusted list, filter words, thresholds and team activity**, shared by everyone who opens the page.
+
+To let your team use it, share the page from its **Share** menu. Give moderators **Contributor** access so they can work on cases; Viewers can only look. Only the owner and Editors can change thresholds.
+
+The web queue is separate from the Discord bot's database: cases opened in one don't appear in the other.
+
 ## Quick start
 
 You need **Python 3.10 or newer**.
