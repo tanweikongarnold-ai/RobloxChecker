@@ -28,34 +28,33 @@ The web queue is separate from the Discord bot's database: cases opened in one d
 
 ## Quick start
 
-You need **Python 3.10 or newer**.
+1. **Make the bot on Discord.** Go to <https://discord.com/developers/applications>, click **New Application**, give it a name, open the **Bot** tab and click **Reset Token**. Copy the long code it shows (that's your token; keep it secret).
+2. **Download this project.** Click [this ZIP link](https://github.com/tanweikongarnold-ai/RobloxChecker/archive/refs/heads/claude/funny-pascal-tvz0kv.zip) and unzip it.
+3. **Start it.** In the unzipped folder, double-click **`start.bat`** (Windows) or **`start.command`** (Mac). The first time, it sets itself up and asks you to paste your token.
+   If it says Python is missing, install it from <https://www.python.org/downloads/> (on Windows, tick **"Add python.exe to PATH"**) and double-click again.
+4. **Add it to your server.** When the window says the bot is online, it shows an invite link. Open it and pick your server.
+5. **In your server, type `/setup`.** Pick your moderator role. The bot creates its channels (`#alt-review`, `#mod-log`, `#badge-tracking`) that only admins and mods can see.
 
-1. **Create the bot.** Go to <https://discord.com/developers/applications>, click **New Application**, then open **Bot** and **Reset Token**. Copy the token. The bot doesn't need any privileged intents.
-2. **Invite it.** Replace `YOUR_APP_ID` (shown under *General Information*) and open this link:
-   ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot+applications.commands&permissions=84992
-   ```
-   (permissions: View Channels, Send Messages, Embed Links, Read Message History)
-3. **Install and configure:**
-   ```bash
-   git clone https://github.com/tanweikongarnold-ai/RobloxChecker.git
-   cd RobloxChecker
-   python -m venv .venv
-   source .venv/bin/activate          # Windows: .venv\Scripts\activate
-   pip install -r requirements.txt
-   cp .env.example .env               # then paste your token into .env
-   ```
-4. **Run it:**
-   ```bash
-   python -m bot
-   ```
-   Slash commands are registered on startup. Set `DEV_GUILD_ID` in `.env` to your server's ID while testing and they show up instantly in that server.
+Done. Type `/check` and paste a Roblox profile link.
 
-The bot keeps everything in one SQLite file (`data/robloxchecker.db` by default). Back that file up. The badge tracker only runs while the bot is online, so host it somewhere that stays up (a VPS, Railway, a Raspberry Pi, etc.).
+Keep the window open: closing it (or turning the computer off) takes the bot offline. To keep it online all the time, run it on a computer that stays on (a spare PC, a Raspberry Pi or a small cloud server). Everything the bot remembers is in the `data` folder.
 
-## Setting up your server (admins)
+<details>
+<summary>Prefer the command line?</summary>
 
-Anyone with **Manage Server** can configure the bot:
+```bash
+git clone -b claude/funny-pascal-tvz0kv https://github.com/tanweikongarnold-ai/RobloxChecker.git
+cd RobloxChecker
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python -m bot        # asks for the token the first time, or put DISCORD_TOKEN in .env
+```
+Set `DEV_GUILD_ID` in `.env` to your server's ID while testing and slash commands show up instantly there.
+</details>
+
+## Changing settings later
+
+`/setup` covers the basics. Anyone with **Manage Server** can fine-tune:
 
 ```
 /config channels review:#alt-review log:#mod-log tracking:#badge-tracking
@@ -97,6 +96,7 @@ If an account keeps getting flagged but is actually fine (a friend's new account
 | `/track add user [note]` · `remove` · `list` · `history` · `now` | Watchlist. Tracked players are rescanned every `TRACK_INTERVAL_MINUTES` (default 6 hours). |
 | `/trust add user [reason]` · `remove` · `list` | Accounts that should never be auto-flagged. |
 | `/keywords add` · `disable` · `remove` · `list` · `test` | Tune the NSFW filter for your server. `test` shows how any text would score. |
+| `/setup [mod_role]` | One-step setup: creates the bot's private channels and sets your mod role. |
 | `/config show` · `channels` · `clear-channel` · `add-modrole` · `remove-modrole` · `thresholds` · `autoflag` | Server settings (Manage Server). |
 | `/audit [moderator] [limit]` | Recent moderator actions. |
 

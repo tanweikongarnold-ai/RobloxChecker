@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
+import sys
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from .config import Settings
+from .config import Settings, forget_env_value
 from .db import Database
 from .permissions import NotAdmin, NotModerator
 from .roblox import RobloxClient, RobloxError, UserNotFound
@@ -19,6 +20,13 @@ from .views import CaseButton, ProfileButton
 log = logging.getLogger("robloxchecker")
 
 EXTENSIONS = ("bot.cogs.check", "bot.cogs.cases", "bot.cogs.tracking", "bot.cogs.settings")
+
+# View Channels, Send Messages, Embed Links, Read Message History, and Manage Channels (for /setup).
+INVITE_PERMISSIONS = discord.Permissions(view_channel=True, send_messages=True, embed_links=True, read_message_history=True, manage_channels=True)
+
+
+def invite_link(app_id: int) -> str:
+    return discord.utils.oauth_url(app_id, permissions=INVITE_PERMISSIONS, scopes=("bot", "applications.commands"))
 
 
 class RobloxCheckerBot(commands.Bot):
@@ -35,6 +43,7 @@ class RobloxCheckerBot(commands.Bot):
         self.filters = FilterRegistry(self.db)
         self.scanner = Scanner(self.roblox, self.db, self.filters)
         self.cases = CaseService(self)
+        self._greeted = False
 
     async def setup_hook(self) -> None:
         await self.db.connect()
@@ -57,6 +66,15 @@ class RobloxCheckerBot(commands.Bot):
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (%s) in %d server(s)", self.user, getattr(self.user, "id", "?"), len(self.guilds))
+        if self._greeted or self.user is None:
+            return
+        self._greeted = True
+        line = "=" * 64
+        print(f"\n{line}\n  {self.user.name} is online!\n")
+        print("  Add it to your server with this link:")
+        print(f"  {invite_link(self.user.id)}\n")
+        print("  Then type /setup in your server.")
+        print(f"  Keep this window open. Closing it turns the bot off.\n{line}\n", flush=True)
 
     async def close(self) -> None:
         await super().close()
@@ -93,4 +111,16 @@ def main() -> None:
     settings = Settings.from_env()
     discord.utils.setup_logging(level=getattr(logging, settings.log_level, logging.INFO))
     bot = RobloxCheckerBot(settings)
-    bot.run(settings.token, log_handler=None)
+    try:
+        bot.run(settings.token, log_handler=None)
+    except discord.LoginFailure:
+        forget_env_value("DISCORD_TOKEN")
+        print(
+            "\nDiscord didn't accept that bot token. Get a new one (Developer Portal > your app > Bot > Reset Token),"
+            "\nthen start the bot again and paste it when asked.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except (OSError, discord.GatewayNotFound) as exc:
+        print(f"\nCouldn't connect to Discord ({exc.__class__.__name__}). Check your internet connection and start the bot again.", file=sys.stderr)
+        sys.exit(1)

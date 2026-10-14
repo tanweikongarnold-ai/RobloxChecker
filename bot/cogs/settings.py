@@ -31,6 +31,79 @@ class Settings(commands.Cog):
     def __init__(self, bot: "RobloxCheckerBot"):
         self.bot = bot
 
+    # ------------------------------------------------------------------- setup
+
+    @app_commands.command(name="setup", description="One-step setup: create the bot's channels and choose your moderator role.")
+    @app_commands.describe(mod_role="The role your moderators have. They'll be able to see the bot's channels and use it.")
+    @app_commands.guild_only()
+    @admin_only()
+    async def setup_cmd(self, interaction: discord.Interaction, mod_role: discord.Role | None = None) -> None:
+        guild = interaction.guild
+        assert guild is not None
+        cfg = await self.bot.db.get_config(guild.id)
+        existing = guild.get_channel(cfg.review_channel_id) if cfg.review_channel_id else None
+        if existing is not None:
+            if mod_role:
+                await self.bot.db.add_mod_role(guild.id, mod_role.id)
+            await interaction.response.send_message(
+                f"✅ Already set up. Flagged accounts go to {existing.mention}."
+                + (f" {mod_role.mention} is a moderator role." if mod_role else "")
+                + "\nTo use different channels, use `/config channels`.",
+                ephemeral=True,
+                allowed_mentions=NO_MENTIONS,
+            )
+            return
+        if not guild.me.guild_permissions.manage_channels:
+            await interaction.response.send_message(
+                "I need the **Manage Channels** permission to create my channels. Kick me and add me again with the "
+                "link from the bot's window, or make the channels yourself and use `/config channels`.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        # Private to moderators: hidden from @everyone, visible to the bot and the mod role (admins see everything).
+        overwrites: dict = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, embed_links=True, read_message_history=True),
+        }
+        if mod_role:
+            overwrites[mod_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+        reason = f"RobloxChecker /setup by {interaction.user}"
+        try:
+            category = await guild.create_category("RobloxChecker", overwrites=overwrites, reason=reason)
+            review = await guild.create_text_channel(
+                "alt-review", category=category, reason=reason,
+                topic="Flagged Roblox accounts. Press Claim, look into it, then Confirm or Dismiss.",
+            )
+            log = await guild.create_text_channel(
+                "mod-log", category=category, reason=reason, topic="Everything moderators do with RobloxChecker."
+            )
+            tracking = await guild.create_text_channel(
+                "badge-tracking", category=category, reason=reason, topic="Badge updates for players on the watchlist (/track add)."
+            )
+        except discord.HTTPException as exc:
+            await interaction.followup.send(f"Couldn't create the channels: {exc.text or exc}. Check my permissions and try again.", ephemeral=True)
+            return
+
+        await self.bot.db.update_config(
+            guild.id, review_channel_id=review.id, log_channel_id=log.id, tracking_channel_id=tracking.id
+        )
+        if mod_role:
+            await self.bot.db.add_mod_role(guild.id, mod_role.id)
+        await self.bot.cases.audit(guild, interaction.user.id, "config", "Ran /setup")
+        who = (
+            f"Only admins and {mod_role.mention} can see them."
+            if mod_role
+            else "Only admins can see them. Run `/setup mod_role:@YourModRole` to let your mods in."
+        )
+        await interaction.followup.send(
+            f"✅ All set! I made {review.mention}, {log.mention} and {tracking.mention}. {who}\n\n"
+            "**Try it:** type `/check` and paste a Roblox profile link.",
+            ephemeral=True,
+            allowed_mentions=NO_MENTIONS,
+        )
+
     # ------------------------------------------------------------------ config
 
     @config.command(name="show", description="Show the current settings.")

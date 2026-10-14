@@ -1,0 +1,3 @@
+# Keep Windows line endings in the .bat file and Unix ones in the Mac launcher.
+*.bat -text
+*.command text eol=lf
