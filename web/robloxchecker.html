@@ -106,6 +106,7 @@ main.wrap { padding-block: 22px 60px; }
 .spread { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .btn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 14px var(--font-body); padding: 8px 14px; border-radius: var(--r-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 .btn:hover:not(:disabled) { border-color: var(--muted); }
+a.btn { text-decoration: none; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
@@ -145,6 +146,13 @@ legend { padding: 0; margin-bottom: 12px; }
 .paste { border: 1.5px dashed var(--line); border-radius: var(--r); padding: 12px; background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
 .paste.drag { border-color: var(--accent); background: var(--accent-soft); }
 .paste textarea { min-height: 70px; background: var(--surface); }
+.lookup { display: flex; flex-direction: column; gap: 8px; }
+.lookup-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.lookup-row input { flex: 1 1 220px; }
+.linkrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.progress { display: inline-flex; gap: 8px; align-items: center; }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .thumb { display: flex; gap: 10px; align-items: center; font-size: 13px; }
 .thumb img { width: 64px; height: 48px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); }
 .example { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 9px 12px; border-radius: var(--r-sm); background: var(--accent-soft); color: var(--ink); font-size: 13.5px; }
@@ -257,7 +265,7 @@ th.n { text-align: right; }
   .brand .sub { display: none; }
   th, td { padding: 8px 10px; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 
 <header class="top">
@@ -299,10 +307,20 @@ th.n { text-align: right; }
           <div class="example" id="example-note">
             <span><b>Example profile.</b> This isn't a real player. Clear the form or paste a real profile to check someone.</span>
           </div>
+          <div class="lookup">
+            <label class="field" for="lookup-input"><span>Roblox profile link</span></label>
+            <div class="lookup-row">
+              <input type="text" id="lookup-input" placeholder="https://www.roblox.com/users/1234567/profile" spellcheck="false" autocomplete="off">
+              <button type="button" class="btn primary" id="lookup-btn">Look up</button>
+            </div>
+            <small class="muted" id="lookup-help">Paste a profile link, a user ID or a username.</small>
+            <div class="small" id="lookup-status" role="status"></div>
+            <div class="linkrow" id="lookup-links" hidden></div>
+          </div>
           <div class="paste" id="paste-zone">
             <label class="field" for="paste-text">
-              <span>Fill in from Roblox</span>
-              <small id="paste-help">Open the player's Roblox profile, select all (Ctrl+A), copy, and paste here.</small>
+              <span>Paste from Roblox</span>
+              <small id="paste-help">Copy everything on a Roblox page (Ctrl+A, then Ctrl+C) and paste it here. Profile pages and the data pages from Look up both work.</small>
             </label>
             <textarea id="paste-text" placeholder="Paste the profile page text here"></textarea>
             <div class="thumb" id="paste-thumb" hidden></div>
@@ -320,6 +338,7 @@ th.n { text-align: right; }
               <label class="field" for="f-username"><span>Username</span><input type="text" id="f-username" placeholder="e.g. Builderman" maxlength="40"></label>
               <label class="field" for="f-display"><span>Display name</span><input type="text" id="f-display" maxlength="60"></label>
             </div>
+            <input type="hidden" id="f-userid"><input type="hidden" id="f-topshare">
             <label class="field" for="f-bio"><span>About (bio)</span><textarea id="f-bio" maxlength="2000"></textarea></label>
             <div class="grid2">
               <label class="field" for="f-past"><span>Past usernames</span><input type="text" id="f-past" placeholder="Separate with commas"><small>Shown on the profile under the name.</small></label>
@@ -635,6 +654,7 @@ const ENGINE = (() => {
       if (count >= 5) {
         if (p.games === null) missing.push("how many games the badges are from");
         else if (p.games > 0 && p.games <= 2) add(12, `All badges come from only ${p.games} game(s), a sign of badge farming`);
+        else if (count >= 10 && p.topShare != null && p.topShare >= 0.8) add(8, `${Math.round(p.topShare * 100)}% of badges come from a single game`);
         else if (p.games >= 25) add(-5, `Badges from ${p.games} different games`);
         if (p.burst) add(12, "Most badges were earned within one 24h window");
         if (age !== null && age > 180 && p.recentOnly && !p.burst) add(10, "Old account that only started earning badges in the last 2 weeks");
@@ -725,6 +745,90 @@ function parseProfileText(text) {
   }
   return out;
 }
+
+/* ---- Roblox links and public data pages (pure helpers) ---- */
+const ROBLOX = (() => {
+  const API = {
+    search: (name) => `https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(name)}&limit=10`,
+    user: (id) => `https://users.roblox.com/v1/users/${id}`,
+    history: (id) => `https://users.roblox.com/v1/users/${id}/username-history?limit=50&sortOrder=Desc`,
+    friends: (id) => `https://friends.roblox.com/v1/users/${id}/friends/count`,
+    followers: (id) => `https://friends.roblox.com/v1/users/${id}/followers/count`,
+    groups: (id) => `https://groups.roblox.com/v1/users/${id}/groups/roles`,
+    badges: (id, cursor) => `https://badges.roblox.com/v1/users/${id}/badges?limit=100&sortOrder=Desc` + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""),
+    dates: (id, ids) => `https://badges.roblox.com/v1/users/${id}/badges/awarded-dates?badgeIds=${ids.join(",")}`,
+    avatar: (id) => `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${id}&size=150x150&format=Png&isCircular=false`,
+  };
+
+  /** A profile link, "id:123", a bare user ID or a username → {id} or {username}. */
+  function parseLookup(text) {
+    const t = String(text || "").trim();
+    let m = t.match(/roblox\.com\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?users\/(\d{1,15})/i);
+    if (m) return { id: Number(m[1]) };
+    m = t.match(/^(?:id:\s*)?(\d{1,15})$/i);
+    if (m) return { id: Number(m[1]) };
+    m = t.match(/roblox\.com\/users\/profile\?username=([A-Za-z0-9_]{3,20})/i) || t.match(/^@?([A-Za-z0-9_]{3,20})$/);
+    if (m) return { username: m[1] };
+    return null;
+  }
+  const profileUrl = (look) => (look.id ? `https://www.roblox.com/users/${look.id}/profile` : `https://www.roblox.com/users/profile?username=${encodeURIComponent(look.username)}`);
+
+  /** The JSON in a page's text, tolerating a browser's "Pretty-print" label or other text around it. */
+  function extractJson(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "object") return value;
+    const text = String(value);
+    try { return JSON.parse(text); } catch (_) { /* look for JSON inside */ }
+    const starts = [text.indexOf("{"), text.indexOf("[")].filter((i) => i >= 0);
+    if (!starts.length) return null;
+    const start = Math.min(...starts);
+    const end = Math.max(text.lastIndexOf("}"), text.lastIndexOf("]"));
+    if (end <= start) return null;
+    try { return JSON.parse(text.slice(start, end + 1)); } catch (_) { return null; }
+  }
+
+  /** Same statistics as the bot's badge_stats(); `at` is the award time in ms (or null). */
+  function badgeStats(badges, now = Date.now()) {
+    const games = new Map();
+    for (const b of badges) if (b.awarder !== null && b.awarder !== undefined) games.set(b.awarder, (games.get(b.awarder) || 0) + 1);
+    const counted = [...games.values()].reduce((a, b) => a + b, 0);
+    const stats = { total: badges.length, distinct: games.size, top: counted ? Math.max(...games.values()) / counted : 0, dated: 0, busiest: 0, recent: 0, first: null };
+    const dates = badges.map((b) => b.at).filter((t) => typeof t === "number").sort((a, b) => a - b);
+    if (dates.length) {
+      stats.dated = dates.length;
+      stats.first = dates[0];
+      let best = 0, start = 0;
+      for (let end = 0; end < dates.length; end++) {
+        while (dates[end] - dates[start] > 86400000) start++;
+        best = Math.max(best, end - start + 1);
+      }
+      stats.busiest = best / dates.length;
+      stats.recent = dates.filter((t) => now - t <= 14 * 86400000).length / dates.length;
+    }
+    return stats;
+  }
+
+  /** Recognise a pasted Roblox data page. Returns {kind, ...} or null. */
+  function classify(json) {
+    if (!json || typeof json !== "object" || Array.isArray(json)) return null;
+    if (typeof json.name === "string" && typeof json.created === "string" && json.id !== undefined) return { kind: "user", user: json };
+    if (Array.isArray(json.errors) && json.errors.length && json.data === undefined) return { kind: "error", message: String(json.errors[0].message || "Roblox returned an error") };
+    if (typeof json.count === "number" && Object.keys(json).length === 1) return { kind: "count", count: json.count };
+    const data = Array.isArray(json.data) ? json.data.filter((x) => x && typeof x === "object") : null;
+    if (!data) return null;
+    const first = data[0] || {};
+    if ("awarder" in first) return { kind: "badges", badges: data.map((b) => ({ id: b.id, awarder: b.awarder ? b.awarder.id : null, at: null })), more: !!json.nextPageCursor };
+    if ("badgeId" in first) return { kind: "dates" };
+    if ("group" in first) return { kind: "groups", groups: data.map((x) => x.group && x.group.name).filter((n) => typeof n === "string") };
+    if ("state" in first && "targetId" in first) return { kind: "avatar", state: first.state };
+    if (typeof first.name === "string" && first.id !== undefined) return { kind: "search", users: data.map((u) => ({ id: u.id, name: u.name, displayName: u.displayName })) };
+    if (typeof first.name === "string") return { kind: "history", names: data.map((x) => x.name).filter((n) => typeof n === "string") };
+    if (!data.length && "nextPageCursor" in json) return { kind: "empty" };
+    return null;
+  }
+
+  return { API, parseLookup, profileUrl, extractJson, badgeStats, classify };
+})();
 </script>
 
 <script>
@@ -743,6 +847,7 @@ const S = {
   settings: { ...DEFAULT_SETTINGS }, people: {}, peers: [],
   tab: "check", filter: "open", search: "", selected: null,
   example: true, pendingImage: null, contentFilter: ENGINE.buildFilter([]),
+  mcp: null, browserOk: false, tabId: null,
 };
 
 /* ---------------------------------------------------------------- helpers */
@@ -821,13 +926,18 @@ function readForm() {
     premium: F("f-premium").checked,
     avatarBlocked: F("f-avatar").checked,
     legacy: numVal("f-legacy") ?? 0,
+    userId: /^\d+$/.test(F("f-userid").value.trim()) ? Number(F("f-userid").value.trim()) : null,
+    topShare: Number.isFinite(parseFloat(F("f-topshare").value)) ? parseFloat(F("f-topshare").value) : null,
   };
 }
-const FORM_IDS = ["f-username", "f-display", "f-bio", "f-past", "f-groups", "f-join", "f-badges", "f-games", "f-first", "f-friends", "f-followers", "f-groupcount", "f-legacy"];
+const FORM_IDS = ["f-username", "f-display", "f-bio", "f-past", "f-groups", "f-join", "f-badges", "f-games", "f-first", "f-friends", "f-followers", "f-groupcount", "f-legacy", "f-userid", "f-topshare"];
 const CHECK_IDS = ["f-hidden", "f-burst", "f-recent", "f-verified", "f-premium", "f-avatar"];
-function clearForm() {
+function resetFormFields() {
   for (const id of FORM_IDS) F(id).value = "";
   for (const id of CHECK_IDS) F(id).checked = false;
+}
+function clearForm() {
+  resetFormFields();
   $("case-reason").value = "";
   S.example = false;
   computeAndRender();
@@ -872,6 +982,7 @@ function computeAndRender() {
   const alt = ENGINE.altReport(p, S.settings);
   const nsfw = ENGINE.scanProfile(S.contentFilter, p, S.settings.nsfwThreshold);
   lastCheck = { p, alt, nsfw };
+  $("example-note").hidden = !S.example;
   renderResult();
   renderCheckActions();
 }
@@ -1050,7 +1161,7 @@ async function openCase() {
   if (nsfw.flagged) reasons.push("nsfw");
   if (!reasons.length || note) reasons.push("manual");
   const body = {
-    key, username: p.username, displayName: p.displayName || p.username,
+    key, username: p.username, displayName: p.displayName || p.username, userId: p.userId,
     altScore: alt.score, altVerdict: alt.verdict, nsfwScore: nsfw.score,
     signals: alt.signals.slice(0, 10).map((s) => [s.points, s.label]),
     hits: nsfw.hits.slice(0, 10).map((x) => [x.weight, x.label, x.field, x.matched]),
@@ -1266,7 +1377,7 @@ function renderCaseFile() {
       h("div", { class: "row" }, reasonChips(c.reasons),
         watchers.length ? h("span", { class: "viewing" }, watchers.slice(0, 4).map((w) => avatar(w.by || w.presence.uid, 18)), `${watchers.map((w) => personName(w.by || w.presence.uid)).slice(0, 3).join(", ")} viewing`) : null),
       h("div", { class: "row" }, actions,
-        h("a", { class: "btn sm ghost", href: "https://www.roblox.com/search/users?keyword=" + encodeURIComponent(c.username), target: "_blank", rel: "noopener" }, "Find on Roblox ↗")),
+        h("a", { class: "btn sm ghost", href: c.userId ? `https://www.roblox.com/users/${c.userId}/profile` : "https://www.roblox.com/search/users?keyword=" + encodeURIComponent(c.username), target: "_blank", rel: "noopener" }, c.userId ? "Roblox profile ↗" : "Find on Roblox ↗")),
       blocked && c.status === "open" ? h("p", { class: "small muted" }, `${person(c.claimedBy).name} is handling this case. Add a note if you have something to share.`) : null),
     h("div", { class: "cf-body" },
       h("div", { class: "gauges", style: "padding:0" },
@@ -1448,6 +1559,284 @@ function refreshPeople() {
   }, 60);
 }
 
+
+/* ------------------------------------------------------------- lookup */
+/* Claude's browser (desktop app, page owner only) reads Roblox's public data pages.
+   Everywhere else, Look up gives links to those pages and the paste box reads them. */
+const BROWSER = "host:claude_browser";
+const { API } = ROBLOX;
+class LookupError extends Error { constructor(code, message) { super(message); this.code = code; } }
+const FATAL = new Set(["server_not_connected", "not_in_manifest", "blocked_by_policy", "not_granted", "capability_disabled", "capability_removed",
+  "approval_required", "needs_reauth", "selection_required", "server_not_found", "cancelled", "bad_request", "transform_error", "user_changed", "consent_required"]);
+const NO_BROWSER = new Set(["server_not_connected", "not_in_manifest", "not_granted", "capability_disabled", "capability_removed", "blocked_by_policy", "bad_request", "transform_error"]);
+const isFatal = (e) => !!e && !(e instanceof LookupError) && FATAL.has(e.code);
+
+function updateLookupHelp() {
+  $("lookup-help").textContent = S.browserOk
+    ? "Paste a profile link, user ID or username. Claude's browser reads the player's public Roblox data and fills in everything. The first time, you'll be asked to allow each Roblox site."
+    : "Paste a profile link, user ID or username, then press Look up. Automatic reading only works for the page owner in the Claude desktop app (Cowork); here you'll get links to copy from.";
+}
+function lookupError(e) {
+  switch (e && e.code) {
+    case "server_not_connected": return "Claude's browser isn't available here. It only works for the page owner in the Claude desktop app (Cowork).";
+    case "not_in_manifest": case "not_granted": return "Claude's browser is switched off for this page. Allow it in the page's permissions to look players up automatically.";
+    case "blocked_by_policy": return "Your organization doesn't allow Claude's browser.";
+    case "cancelled": return "Lookup stopped because a browser step was declined.";
+    case "approval_required": return "Claude's browser needs your approval. Press Look up again and allow it.";
+    case "needs_reauth": return "Reconnect the Claude app, then try again.";
+    case "bad_request": case "transform_error": return "Claude's browser didn't accept the request.";
+    default: return (e && e.message) || "The lookup didn't finish.";
+  }
+}
+function resultText(r) {
+  if (!r) return "";
+  const texts = (r.content || []).filter((b) => b && b.type === "text" && typeof b.text === "string").map((b) => b.text);
+  if (texts.length) return texts.join("\n");
+  if (typeof r.payload === "string") return r.payload;
+  try { return JSON.stringify(r.payload ?? ""); } catch (_) { return ""; }
+}
+function findTabId(r) {
+  const p = r && r.payload;
+  if (p && typeof p === "object") {
+    const v = p.tabId ?? p.tab_id ?? (p.tab && p.tab.id);
+    if (v !== undefined && v !== null) return v;
+  }
+  const m = resultText(r).match(/tab[\s_-]?id["'\s:=]+["']?([A-Za-z0-9_-]+)/i);
+  if (!m) return null;
+  return /^\d+$/.test(m[1]) ? Number(m[1]) : m[1];
+}
+async function browserRead(url, retried = false) {
+  if (S.tabId === null) {
+    const r = await S.mcp.callTool(BROWSER, "preview_start", { url }, { cache: false });
+    S.tabId = findTabId(r);
+  } else {
+    try {
+      await S.mcp.callTool(BROWSER, "navigate", { url, tabId: S.tabId }, { cache: false });
+    } catch (e) {
+      if (e && e.code === "tool_error" && !retried) { S.tabId = null; return browserRead(url, true); } // tab was closed
+      throw e;
+    }
+  }
+  const r = await S.mcp.callTool(BROWSER, "get_page_text", S.tabId === null ? {} : { tabId: S.tabId }, { cache: false });
+  return resultText(r);
+}
+async function browserJson(url) {
+  const json = ROBLOX.extractJson(await browserRead(url));
+  if (!json || typeof json !== "object") throw new LookupError("unreadable", `Couldn't read ${new URL(url).host}.`);
+  if (Array.isArray(json.errors) && json.errors.length && json.data === undefined && json.id === undefined) {
+    throw new LookupError("api", String(json.errors[0].message || "Roblox returned an error."));
+  }
+  return json;
+}
+async function autoLookup(look, say) {
+  let id = look.id || null;
+  if (!id) {
+    say("Finding the player…");
+    const res = await browserJson(API.search(look.username));
+    const hit = (Array.isArray(res.data) ? res.data : []).find((u) => u && typeof u.name === "string" && u.name.toLowerCase() === look.username.toLowerCase());
+    if (!hit) throw new LookupError("notfound", `No Roblox player is called “${look.username}”.`);
+    id = Number(hit.id);
+  }
+  say("Reading the account…");
+  let user = null;
+  try { user = await browserJson(API.user(id)); } catch (e) { if (isFatal(e)) throw e; }
+  if (!user || typeof user.name !== "string") throw new LookupError("notfound", `Couldn't find a Roblox player with ID ${id}.`);
+  const data = {
+    userId: id, username: user.name, displayName: user.displayName || user.name,
+    bio: typeof user.description === "string" ? user.description : "",
+    joinDate: typeof user.created === "string" ? user.created.slice(0, 10) : null,
+    verified: !!user.hasVerifiedBadge, banned: !!user.isBanned,
+    pastUsernames: [], groups: null, friends: null, followers: null,
+    badges: null, badgesHidden: false, truncated: false, avatarState: null,
+  };
+  const skipped = [];
+  const step = async (label, fn) => {
+    say(`Reading ${label}…`);
+    try { await fn(); } catch (e) { if (isFatal(e)) throw e; console.warn("lookup step failed:", label, e); skipped.push(label); }
+  };
+  await step("past usernames", async () => {
+    const j = await browserJson(API.history(id));
+    data.pastUsernames = (j.data || []).map((x) => x && x.name).filter((n) => typeof n === "string" && n.toLowerCase() !== user.name.toLowerCase());
+  });
+  await step("connections", async () => { const j = await browserJson(API.friends(id)); data.friends = typeof j.count === "number" ? j.count : null; });
+  await step("followers", async () => { const j = await browserJson(API.followers(id)); data.followers = typeof j.count === "number" ? j.count : null; });
+  await step("groups", async () => {
+    const j = await browserJson(API.groups(id));
+    data.groups = (j.data || []).map((x) => x && x.group && x.group.name).filter((n) => typeof n === "string");
+  });
+  await step("badges", async () => {
+    const list = [];
+    let cursor = "";
+    for (let page = 0; page < 2; page++) {
+      let j;
+      try { j = await browserJson(API.badges(id, cursor)); }
+      catch (e) { if (e instanceof LookupError && e.code === "api" && page === 0) { data.badgesHidden = true; return; } throw e; }
+      for (const b of j.data || []) if (b && b.id) list.push({ id: b.id, awarder: b.awarder ? b.awarder.id : null, at: null });
+      cursor = j.nextPageCursor || "";
+      if (!cursor) break;
+    }
+    data.truncated = !!cursor;
+    data.badges = list;
+  });
+  if (data.badges && data.badges.length) {
+    await step("badge dates", async () => {
+      const byId = new Map(data.badges.map((b) => [Number(b.id), b]));
+      const ids = [...byId.keys()];
+      for (let i = 0; i < ids.length; i += 100) {
+        const j = await browserJson(API.dates(id, ids.slice(i, i + 100)));
+        for (const d of j.data || []) {
+          const b = byId.get(Number(d && d.badgeId));
+          const t = Date.parse(d && d.awardedDate);
+          if (b && !Number.isNaN(t)) b.at = t;
+        }
+      }
+    });
+  }
+  await step("avatar", async () => {
+    const j = await browserJson(API.avatar(id));
+    const first = (j.data || [])[0];
+    data.avatarState = (first && first.state) || null;
+  });
+  return { data, skipped };
+}
+function setBadgeFields(badges, truncated) {
+  const st = ROBLOX.badgeStats(badges);
+  F("f-hidden").checked = false;
+  F("f-badges").value = String(st.total);
+  F("f-games").value = st.distinct ? String(st.distinct) : "";
+  F("f-topshare").value = st.distinct ? st.top.toFixed(3) : "";
+  if (st.dated) { // only judge timing when award dates were read; otherwise leave what a moderator ticked
+    F("f-burst").checked = st.total >= 5 && st.dated >= 5 && st.busiest >= 0.8;
+    F("f-recent").checked = !truncated && st.dated >= 5 && st.recent >= 0.9 && st.busiest < 0.8;
+    F("f-first").value = !truncated && st.first ? new Date(st.first).toISOString().slice(0, 10) : "";
+  }
+  return st;
+}
+function applyLookup({ data, skipped }) {
+  resetFormFields();
+  const set = (id, v) => { F(id).value = v === null || v === undefined ? "" : String(v); };
+  set("f-userid", data.userId);
+  set("f-username", data.username);
+  set("f-display", data.displayName);
+  set("f-bio", data.bio);
+  set("f-join", data.joinDate);
+  set("f-past", data.pastUsernames.join(", "));
+  if (data.groups) { set("f-groups", data.groups.join("\n")); set("f-groupcount", data.groups.length); }
+  set("f-friends", data.friends);
+  set("f-followers", data.followers);
+  F("f-verified").checked = data.verified;
+  F("f-avatar").checked = String(data.avatarState || "").toLowerCase() === "blocked";
+  if (data.badgesHidden) F("f-hidden").checked = true;
+  else if (data.badges) setBadgeFields(data.badges, data.truncated);
+  S.example = false;
+  computeAndRender();
+  const notes = [`Filled in from Roblox for @${data.username}.`];
+  if (data.truncated) notes.push("They have more than 200 badges; the newest 200 were read.");
+  if (data.badges && !data.badges.length) notes.push("No badges are visible. If their inventory is private, tick “badges are private”.");
+  if (data.banned) notes.push("This account is banned on Roblox.");
+  if (skipped.length) notes.push(`Couldn't read: ${skipped.join(", ")}. Fill those in by hand if you need them.`);
+  return notes.join(" ");
+}
+function showLookupLinks(look) {
+  const links = [["Profile", ROBLOX.profileUrl(look)]];
+  if (look.id) links.push(["Account data", API.user(look.id)], ["Badges", API.badges(look.id)], ["Groups", API.groups(look.id)], ["Past names", API.history(look.id)]);
+  else links.push(["Find their ID", API.search(look.username)]);
+  const row = $("lookup-links");
+  row.hidden = false;
+  row.replaceChildren(...links.map(([label, url]) => h("a", { class: "btn sm", href: url, target: "_blank", rel: "noopener noreferrer" }, label + " ↗")));
+}
+function prefillFromLook(look) {
+  const sameId = look.id && F("f-userid").value === String(look.id);
+  const sameName = look.username && F("f-username").value.toLowerCase() === look.username.toLowerCase();
+  if (!sameId && !sameName) resetFormFields();
+  if (look.id) F("f-userid").value = String(look.id);
+  if (look.username) F("f-username").value = look.username;
+  S.example = false;
+  computeAndRender();
+}
+let lookupBusy = false;
+async function lookUp() {
+  if (lookupBusy) return;
+  const look = ROBLOX.parseLookup($("lookup-input").value);
+  const status = $("lookup-status");
+  const say = (msg) => status.replaceChildren(h("span", { class: "progress" }, h("span", { class: "spinner", "aria-hidden": "true" }), msg));
+  if (!look) { status.textContent = "That doesn't look like a Roblox profile link, user ID or username."; return; }
+  if (!S.browserOk) {
+    prefillFromLook(look);
+    showLookupLinks(look);
+    status.textContent = look.id
+      ? "Open each page below, copy everything (Ctrl+A, then Ctrl+C) and paste it into the box underneath. Start with Account data and Badges."
+      : "Open “Find their ID” and paste that page below. Then open the other pages that appear.";
+    return;
+  }
+  lookupBusy = true;
+  $("lookup-btn").disabled = true;
+  try {
+    const result = await autoLookup(look, say);
+    status.textContent = applyLookup(result);
+    $("lookup-links").hidden = true;
+  } catch (e) {
+    console.warn("lookup failed", e);
+    if (e && NO_BROWSER.has(e.code)) { S.browserOk = false; updateLookupHelp(); }
+    status.textContent = lookupError(e) + (S.browserOk ? "" : " Use the links below instead.");
+    if (!S.browserOk) { prefillFromLook(look); showLookupLinks(look); }
+  } finally {
+    lookupBusy = false;
+    $("lookup-btn").disabled = false;
+  }
+}
+/* A pasted Roblox data page (from the Look up links) fills the matching fields. */
+function applyApiJson(json) {
+  const c = ROBLOX.classify(json);
+  if (!c) return null;
+  S.example = false;
+  if (c.kind === "user") {
+    const u = c.user;
+    if (F("f-userid").value && F("f-userid").value !== String(u.id)) resetFormFields();
+    F("f-userid").value = String(u.id);
+    F("f-username").value = u.name;
+    F("f-display").value = u.displayName || "";
+    F("f-bio").value = typeof u.description === "string" ? u.description : "";
+    F("f-join").value = String(u.created).slice(0, 10);
+    F("f-verified").checked = !!u.hasVerifiedBadge;
+    showLookupLinks({ id: Number(u.id) });
+    return `Filled in the account for @${u.name}${u.isBanned ? " (banned on Roblox)" : ""}. Paste the Badges page next.`;
+  }
+  if (c.kind === "badges") {
+    const st = setBadgeFields(c.badges, c.more);
+    return `Filled in ${st.total}${c.more ? "+" : ""} badges from ${st.distinct} games.` + (c.more ? " That page only shows the newest 100." : "") + " Badge dates aren't on that page, so tick the farming boxes yourself if they apply.";
+  }
+  if (c.kind === "groups") {
+    F("f-groups").value = c.groups.join("\n");
+    F("f-groupcount").value = String(c.groups.length);
+    return `Filled in ${c.groups.length} group(s).`;
+  }
+  if (c.kind === "history") {
+    const current = F("f-username").value.toLowerCase();
+    F("f-past").value = c.names.filter((n) => n.toLowerCase() !== current).join(", ");
+    return `Filled in ${c.names.length} past username(s).`;
+  }
+  if (c.kind === "search") {
+    const wanted = (F("f-username").value || "").toLowerCase();
+    const hit = c.users.find((u) => String(u.name).toLowerCase() === wanted) || (c.users.length === 1 ? c.users[0] : null);
+    if (!hit) return "That search didn't include an exact match. Check the username and try again.";
+    F("f-userid").value = String(hit.id);
+    F("f-username").value = hit.name;
+    showLookupLinks({ id: Number(hit.id) });
+    $("lookup-input").value = ROBLOX.profileUrl({ id: Number(hit.id) });
+    return `Found @${hit.name} (ID ${hit.id}). Now open Account data and Badges above and paste them here.`;
+  }
+  if (c.kind === "avatar") {
+    F("f-avatar").checked = String(c.state).toLowerCase() === "blocked";
+    return c.state === "Blocked" ? "Their avatar picture is blocked by Roblox." : "Their avatar picture isn't blocked.";
+  }
+  if (c.kind === "count") return "That page is a single number. Type it into Connections or Followers.";
+  if (c.kind === "dates") return "That page has badge dates, which this box can't match up. Paste the Badges page instead.";
+  if (c.kind === "empty") { F("f-badges").value = "0"; F("f-games").value = ""; return "That page is empty: no badges are visible. If their inventory is private, tick “badges are private”."; }
+  if (c.kind === "error") return `Roblox answered with an error: ${c.message}`;
+  return null;
+}
+
 /* ------------------------------------------------------------ fill-in */
 async function fillFromPaste() {
   const text = $("paste-text").value.trim();
@@ -1455,6 +1844,16 @@ async function fillFromPaste() {
   const status = $("paste-status");
   if (!text && !image) { status.textContent = "Paste the profile text or a screenshot first."; return; }
   const btn = $("paste-fill");
+  const api = text ? ROBLOX.extractJson(text) : null;
+  if (api && typeof api === "object") {
+    const msg = applyApiJson(api);
+    if (msg) {
+      status.textContent = msg;
+      $("paste-text").value = "";
+      computeAndRender();
+      return;
+    }
+  }
   btn.disabled = true;
   status.textContent = S.sample ? "Reading the profile…" : "";
   let data = null, how = "";
@@ -1505,10 +1904,15 @@ function wire() {
   const form = $("check-form");
   form.addEventListener("submit", (e) => e.preventDefault());
   form.addEventListener("input", (e) => {
-    if (e.target && e.target.id === "paste-text") return;
+    const id = e.target && e.target.id;
+    if (id === "paste-text" || id === "lookup-input") return;
+    if (id === "f-badges" || id === "f-games") F("f-topshare").value = ""; // typed by hand now
+    if (id === "f-username") F("f-userid").value = ""; // a different name is a different account
     S.example = false;
     computeAndRender();
   });
+  $("lookup-btn").addEventListener("click", lookUp);
+  $("lookup-input").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); lookUp(); } });
   $("clear-form").addEventListener("click", clearForm);
   $("paste-fill").addEventListener("click", fillFromPaste);
   const zone = $("paste-zone");
@@ -1622,7 +2026,7 @@ function subscribe(db) {
 
 async function connect() {
   const use = window.claude && typeof window.claude.use === "function" ? (name) => window.claude.use(name).catch(() => null) : async () => null;
-  const [db, user, room, sample] = await Promise.all([use("db"), use("user"), use("room"), use("sample")]);
+  const [db, user, room, sample, mcp] = await Promise.all([use("db"), use("user"), use("room"), use("sample"), use("mcp")]);
   S.user = user;
   if (user) {
     S.meId = await user.id();
@@ -1637,6 +2041,15 @@ async function connect() {
       ? "Paste the profile page text (select all on the Roblox profile, copy, paste), or paste or drop a screenshot. Claude reads it into the form."
       : "Open the player's Roblox profile, select all (Ctrl+A), copy, and paste here. Claude reads it into the form.";
   }
+  if (mcp) {
+    S.mcp = mcp;
+    try {
+      const listed = await mcp.listTools(BROWSER);
+      const owner = user ? await user.isOwner() : false;
+      S.browserOk = owner && listed.servers.some((srv) => srv.server === BROWSER);
+    } catch (_) { S.browserOk = false; }
+  }
+  updateLookupHelp();
   if (db) { S.db = db; subscribe(db); }
   else S.noStore = true;
   if (room) {

@@ -16,7 +16,9 @@ A Discord bot for moderation teams that:
 [`web/robloxchecker.html`](web/robloxchecker.html) is a browser version of the moderation desk, published as a claude.ai page:
 **https://claude.ai/artifact/ALU75BJcokkbg8QZEMbbkE**
 
-- **Check a player**: the same alt score and NSFW filter as the bot, worked out in the browser as you type. Pages hosted on claude.ai can't contact Roblox, so you enter the player's details yourself. To save typing, paste the profile page text (or a screenshot) and Claude fills the form in for you.
+- **Check a player**: paste a Roblox profile link (or user ID / username) and press **Look up**. You get the same alt score and NSFW filter as the bot, worked out in the browser.
+  - **Automatic**: for the page owner, opened in the Claude desktop app's Cowork, Claude's built-in browser reads the player's public Roblox data. That covers the account, past names, connections, followers, groups, badges with award dates, and avatar status, and it fills in everything. The first time, you're asked to allow each Roblox site.
+  - **Everywhere else**: web pages can't read other websites, so Look up gives one-click links to the player's Roblox data pages. Copy each page (Ctrl+A, Ctrl+C) into the paste box and the matching fields fill in. Pasting the profile page text or a screenshot also works; Claude reads it into the form.
 - **Review queue**: a shared, live list of cases. Claim, confirm, dismiss, reopen and leave notes. Two people can't claim the same case, and you can see who else is looking at a case right now.
 - **Trusted list, filter words, thresholds and team activity**, shared by everyone who opens the page.
 
