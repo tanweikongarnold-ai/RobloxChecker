@@ -137,7 +137,7 @@ def interaction_member(bot, permissions: int, roles=("777",)):  # noqa: F811
 
 
 async def test_manage_server_is_read_from_discord_not_the_cache(bot):  # noqa: F811
-    from bot.permissions import is_admin, is_moderator
+    from bot.permissions import is_admin
 
     manage_server = discord.Permissions(manage_guild=True).value
     member = interaction_member(bot, manage_server)

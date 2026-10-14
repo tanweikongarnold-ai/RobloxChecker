@@ -10,12 +10,14 @@ from typing import Any
 
 import aiohttp
 
-from .models import AccountData, Badge, Group, parse_roblox_time
+from .models import AccountData, Badge, Group, GroupInfo, GroupMember, parse_roblox_time
 
 log = logging.getLogger(__name__)
 
 _PROFILE_URL = re.compile(r"roblox\.com/users/(\d+)", re.IGNORECASE)
 _USERNAME = re.compile(r"^@?([A-Za-z0-9_]{3,20})$")
+# Roblox renamed groups to "communities"; both kinds of link are around.
+_GROUP_URL = re.compile(r"roblox\.com/(?:[a-z]{2}(?:-[a-z]{2})?/)?(?:groups|communities)/(\d+)", re.IGNORECASE)
 
 
 class RobloxError(Exception):
@@ -23,6 +25,10 @@ class RobloxError(Exception):
 
 
 class UserNotFound(RobloxError):
+    pass
+
+
+class GroupNotFound(RobloxError):
     pass
 
 
@@ -146,11 +152,12 @@ class RobloxClient:
                 raise UserNotFound(f"No Roblox user with ID {user_id}") from exc
             raise
 
-    async def get_badges(self, user_id: int) -> tuple[list[Badge], bool, bool]:
+    async def get_badges(self, user_id: int, max_badges: int | None = None) -> tuple[list[Badge], bool, bool]:
         """Return ``(badges, hidden, truncated)``; newest badges first."""
+        cap = max_badges or self.max_badges
         badges: list[Badge] = []
         cursor = ""
-        while len(badges) < self.max_badges:
+        while len(badges) < cap:
             params = {"limit": 100, "sortOrder": "Desc"}
             if cursor:
                 params["cursor"] = cursor
@@ -166,7 +173,7 @@ class RobloxClient:
             cursor = page.get("nextPageCursor") or ""
             if not cursor:
                 return badges, False, False
-        return badges[: self.max_badges], False, True
+        return badges[:cap], False, True
 
     async def add_award_dates(self, user_id: int, badges: list[Badge]) -> None:
         by_id = {b.id: b for b in badges}
@@ -229,9 +236,73 @@ class RobloxClient:
         data = await self._request("GET", f"https://inventory.roblox.com/v1/users/{user_id}/can-view-inventory")
         return data.get("canView")
 
+    # ---------------------------------------------------------------- groups
+
+    async def resolve_group_id(self, query: str) -> int:
+        """Accept a group/community link, a group ID or an exact group name."""
+        query = query.strip()
+        if match := _GROUP_URL.search(query):
+            return int(match.group(1))
+        if query.lower().startswith("id:"):
+            query = query[3:].strip()
+        if query.isdigit():
+            return int(query)
+        if not 2 <= len(query) <= 50:
+            raise GroupNotFound(f"`{query}` isn't a Roblox group link, ID or name")
+        data = await self._request(
+            "GET", "https://groups.roblox.com/v1/groups/search/lookup", params={"groupName": query}
+        )
+        found = [g for g in data.get("data") or [] if g.get("id")]
+        exact = [g for g in found if str(g.get("name", "")).lower() == query.lower()]
+        if not (exact or found):
+            raise GroupNotFound(f"No Roblox group called `{query}`. Try pasting the group's link instead")
+        return int((exact or found)[0]["id"])
+
+    async def get_group(self, group_id: int) -> GroupInfo:
+        try:
+            data = await self._request("GET", f"https://groups.roblox.com/v1/groups/{group_id}")
+        except _HTTPStatus as exc:
+            if exc.status in (400, 404):
+                raise GroupNotFound(f"No Roblox group with ID {group_id}") from exc
+            raise
+        owner = data.get("owner") or {}
+        return GroupInfo(
+            id=int(data.get("id", group_id)),
+            name=data.get("name") or f"Group {group_id}",
+            description=data.get("description") or "",
+            member_count=data.get("memberCount"),
+            owner_name=owner.get("username"),
+            verified=bool(data.get("hasVerifiedBadge")),
+        )
+
+    async def get_group_members(self, group_id: int, limit: int) -> list[GroupMember]:
+        """Up to ``limit`` members, newest first as Roblox lists them."""
+        members: list[GroupMember] = []
+        cursor = ""
+        while len(members) < limit:
+            params = {"limit": 100, "sortOrder": "Desc"}
+            if cursor:
+                params["cursor"] = cursor
+            page = await self._request("GET", f"https://groups.roblox.com/v1/groups/{group_id}/users", params=params)
+            for item in page.get("data") or []:
+                user, role = item.get("user") or {}, item.get("role") or {}
+                if user.get("userId"):
+                    members.append(
+                        GroupMember(
+                            user_id=int(user["userId"]),
+                            username=user.get("username") or str(user["userId"]),
+                            display_name=user.get("displayName") or user.get("username") or "",
+                            role=role.get("name"),
+                        )
+                    )
+            cursor = page.get("nextPageCursor") or ""
+            if not cursor:
+                break
+        return members[:limit]
+
     # -------------------------------------------------------------- full scan
 
-    async def fetch_account(self, user_id: int) -> AccountData:
+    async def fetch_account(self, user_id: int, *, max_badges: int | None = None) -> AccountData:
         """Fetch everything the analysers need. Only the core profile is mandatory."""
         user = await self.get_user(user_id)
         (
@@ -245,7 +316,7 @@ class RobloxClient:
             headshot,
             inventory_visible,
         ) = await asyncio.gather(
-            self._optional(self.get_badges(user_id), None),
+            self._optional(self.get_badges(user_id, max_badges), None),
             self._optional(self._count(f"https://friends.roblox.com/v1/users/{user_id}/friends/count")),
             self._optional(self._count(f"https://friends.roblox.com/v1/users/{user_id}/followers/count")),
             self._optional(self._count(f"https://friends.roblox.com/v1/users/{user_id}/followings/count")),

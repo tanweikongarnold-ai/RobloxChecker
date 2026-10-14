@@ -38,7 +38,7 @@ def scan_result(**account_kwargs):
 
 async def test_command_tree(bot):
     names = {c.name for c in bot.tree.get_commands()}
-    assert names == {"check", "badges", "audit", "setup", "case", "track", "config", "trust", "keywords"}
+    assert names == {"check", "badges", "audit", "setup", "groupscan", "case", "track", "config", "trust", "keywords"}
     for command in bot.tree.get_commands():
         command.to_dict(bot.tree)  # raises if Discord would reject the definition
 

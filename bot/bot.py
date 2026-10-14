@@ -12,14 +12,14 @@ from discord.ext import commands
 from .config import Settings, forget_env_value
 from .db import Database
 from .permissions import NotAdmin, NotModerator
-from .roblox import RobloxClient, RobloxError, UserNotFound
+from .roblox import GroupNotFound, RobloxClient, RobloxError, UserNotFound
 from .scanner import FilterRegistry, Scanner
 from .services import CaseService
 from .views import CaseButton, ProfileButton
 
 log = logging.getLogger("robloxchecker")
 
-EXTENSIONS = ("bot.cogs.check", "bot.cogs.cases", "bot.cogs.tracking", "bot.cogs.settings")
+EXTENSIONS = ("bot.cogs.check", "bot.cogs.cases", "bot.cogs.tracking", "bot.cogs.settings", "bot.cogs.groups")
 
 # View Channels, Send Messages, Embed Links, Read Message History, and Manage Channels (for /setup).
 INVITE_PERMISSIONS = discord.Permissions(view_channel=True, send_messages=True, embed_links=True, read_message_history=True, manage_channels=True)
@@ -112,7 +112,7 @@ class RobloxCheckerBot(commands.Bot):
             message = "This command only works inside a server."
         elif isinstance(error, app_commands.CheckFailure):
             message = "🚫 You can't use this command."
-        elif isinstance(original, UserNotFound):
+        elif isinstance(original, (UserNotFound, GroupNotFound)):
             message = f"🔍 {original}"
         elif isinstance(original, RobloxError):
             message = f"⚠️ Roblox API problem: {original}"

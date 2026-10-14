@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
 import discord
 
@@ -13,6 +13,9 @@ from .content_filter import Hit, NsfwReport
 from .db import Case, Note, WatchEntry
 from .models import AccountData
 from .scanner import ScanResult
+
+if TYPE_CHECKING:
+    from .group_scan import GroupScanReport, MemberScan
 
 RED = discord.Colour.from_rgb(220, 53, 69)
 DARK_RED = discord.Colour.from_rgb(139, 0, 0)
@@ -334,4 +337,81 @@ def filter_test_embed(text: str, hits: list[Hit], score: int, threshold: int) ->
         value=_lines(_hit_line(h.weight, h.label, "", h.matched) for h in hits) if hits else "None",
         inline=False,
     )
+    return embed
+
+
+def _member_link(scan: "MemberScan") -> str:
+    m = scan.member
+    name = discord.utils.escape_markdown(m.username)
+    shown = discord.utils.escape_markdown(m.display_name)
+    label = f"{shown} (@{name})" if m.display_name and m.display_name != m.username else f"@{name}"
+    return f"[{label}](https://www.roblox.com/users/{m.user_id}/profile)"
+
+
+def _case_tag(scan: "MemberScan", open_cases: dict[int, int]) -> str:
+    case_id = open_cases.get(scan.member.user_id)
+    return f" · case #{case_id}" if case_id else ""
+
+
+def _with_more(lines: list[str], total: int, shown: int) -> list[str]:
+    if total > shown:
+        lines.append(f"…and {total - shown} more")
+    return lines
+
+
+def group_scan_embed(report: "GroupScanReport", open_cases: dict[int, int] | None = None) -> discord.Embed:
+    open_cases = open_cases or {}
+    group = report.group
+    nsfw, alts, suspicious = report.nsfw, report.alts, report.suspicious
+    colour = DARK_RED if nsfw or report.group_nsfw.flagged else RED if alts else ORANGE if suspicious else GREEN
+    embed = discord.Embed(title=clip(f"Group scan · {group.name}", 256), url=group.url, colour=colour)
+
+    total = f" of **{group.member_count:,}**" if group.member_count else ""
+    summary = [
+        f"Checked the newest **{len(report.scans)}**{total} members.",
+        f"🔞 **{len(nsfw)}** NSFW · 🕵️ **{len(alts)}** likely alts · ⚠️ **{len(suspicious)}** suspicious · "
+        f"✅ **{report.clean_count}** look fine",
+    ]
+    if report.trusted:
+        summary.append(f"🛡️ {len(report.trusted)} trusted account(s) skipped.")
+    if report.failed:
+        summary.append(f"❔ {len(report.failed)} couldn't be checked (Roblox didn't answer). Try again later.")
+    if report.group_nsfw.hits:
+        words = ", ".join(f"||{discord.utils.escape_markdown(h.matched or h.label)}||" for h in report.group_nsfw.hits[:4])
+        verdict = "**This group itself looks NSFW**" if report.group_nsfw.flagged else "The group's name or description matched"
+        summary.append(f"{verdict} ({words}).")
+    embed.description = "\n".join(summary)
+
+    if nsfw:
+        lines = []
+        for scan in nsfw[:10]:
+            top = scan.result.nsfw.hits[0]
+            match = f" ||{discord.utils.escape_markdown(top.matched)}||" if top.matched and top.matched != top.label else ""
+            also = " · also alt-like" if scan.result.alt.score >= report.config.alt_threshold else ""
+            lines.append(
+                f"{_member_link(scan)} · NSFW **{scan.result.nsfw.score}** · "
+                f"{discord.utils.escape_markdown(top.label)} in {top.field}{match}{also}{_case_tag(scan, open_cases)}"
+            )
+        embed.add_field(name="🔞 NSFW accounts", value=_lines(_with_more(lines, len(nsfw), 10)), inline=False)
+
+    if alts:
+        lines = []
+        for scan in alts[:10]:
+            account = scan.result.account
+            age = account.age_days()
+            badges = "private badges" if account.badges_hidden else f"{len(account.badges)}{'+' if account.badges_truncated else ''} badges"
+            facts = ", ".join(x for x in (f"{age}d old" if age is not None else "", badges) if x)
+            lines.append(f"{_member_link(scan)} · alt **{scan.result.alt.score}** · {facts}{_case_tag(scan, open_cases)}")
+        embed.add_field(name="🕵️ Likely alts", value=_lines(_with_more(lines, len(alts), 10)), inline=False)
+
+    if suspicious:
+        names = [f"@{discord.utils.escape_markdown(s.member.username)} ({s.result.alt.score}/{s.result.nsfw.score})" for s in suspicious[:20]]
+        embed.add_field(
+            name="⚠️ Suspicious, below your thresholds (alt/NSFW)",
+            value=clip(", ".join(_with_more(names, len(suspicious), 20)), 1024),
+            inline=False,
+        )
+    if not (nsfw or alts or suspicious):
+        embed.add_field(name="Result", value="Nobody here crossed your thresholds. 🎉", inline=False)
+    embed.set_footer(text="Scores are hints, not proof. Use /check on anyone for the full breakdown.")
     return embed

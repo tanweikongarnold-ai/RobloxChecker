@@ -84,3 +84,25 @@ class AccountData:
         if self.created is None:
             return None
         return max(0, ((now or utcnow()) - self.created).days)
+
+
+@dataclass(slots=True)
+class GroupInfo:
+    id: int
+    name: str
+    description: str = ""
+    member_count: int | None = None
+    owner_name: str | None = None
+    verified: bool = False
+
+    @property
+    def url(self) -> str:
+        return f"https://www.roblox.com/communities/{self.id}"
+
+
+@dataclass(slots=True)
+class GroupMember:
+    user_id: int
+    username: str
+    display_name: str
+    role: str | None = None

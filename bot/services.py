@@ -36,6 +36,8 @@ AUDIT_VERBS = {
     "keyword.set": "🔤 set filter term",
     "keyword.remove": "🔤 removed filter term",
     "config": "⚙️ changed setting",
+    "groupscan": "🔎 scanned the group",
+    "groupscan.cases": "📂 opened cases from a scan of",
 }
 
 
@@ -126,12 +128,16 @@ class CaseService:
         *,
         opened_by: int | None,
         manual_reason: str | None = None,
+        note: str | None = None,
+        announce: bool = True,
     ) -> tuple[Case | None, bool]:
         """Open (or refresh) a case for a scanned account.
 
         Automatic flags (``manual_reason is None``) respect thresholds and the
         trusted list; a moderator opening a case by hand always gets one.
         Returns ``(case, created)``; ``case`` is ``None`` if nothing was flagged.
+        ``note`` is added to a newly opened case (e.g. where it was found);
+        ``announce=False`` skips the per-case line in the mod log (bulk opens log once).
         """
         config = await self.db.get_config(guild.id)
         reasons = result.flag_reasons(config)
@@ -154,9 +160,11 @@ class CaseService:
             details,
             opened_by,
         )
+        if created and note and opened_by:
+            await self.db.add_note(case.id, opened_by, note)
         await self.publish(guild, case)
         case = await self.db.get_case(guild.id, case.id) or case  # now includes the review message link
-        if created:
+        if created and announce:
             await self.audit(guild, opened_by, "case.open", f"case #{case.id} ({account.username})", ", ".join(reasons))
         return case, created
 
