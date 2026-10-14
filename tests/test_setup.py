@@ -50,6 +50,7 @@ def test_invite_link():
     url = invite_link(123)
     assert "client_id=123" in url and "applications.commands" in url
     assert "permissions=85008" in url  # view, send, embed, history, manage channels
+    assert url.endswith("&integration_type=0")  # "Add to Server", never "Add to My Apps"
 
 
 class FakePerms:
@@ -115,8 +116,54 @@ async def test_setup_creates_private_channels_once(bot):  # noqa: F811
 async def test_setup_without_manage_channels_explains(bot):  # noqa: F811
     cog = bot.get_cog("Settings")
     guild = FakeSetupGuild()
-    guild.me.guild_permissions = type("P", (), {"manage_channels": False})()
-    interaction = FakeInteraction(guild, type("U", (), {"id": 5})())
+    interaction = FakeInteraction(guild, type("U", (), {"id": 5})(), app_permissions=discord.Permissions.none())
     await cog.setup_cmd.callback(cog, interaction, None)
     assert guild.created == []
     assert "Manage Channels" in interaction.response.sent[0][0][0]
+
+
+def interaction_member(bot, permissions: int, roles=("777",)):  # noqa: F811
+    """A member exactly as a slash command delivers it when the bot can't see the server's roles."""
+    from discord.guild import Guild
+
+    state = bot._connection
+    guild = Guild._create_unavailable(state=state, guild_id=555, data=None)
+    data = {
+        "user": {"id": "42", "username": "owner", "discriminator": "0", "avatar": None, "global_name": None},
+        "roles": list(roles), "joined_at": "2024-01-01T00:00:00+00:00", "deaf": False, "mute": False,
+        "flags": 0, "permissions": str(permissions),
+    }
+    return discord.Member(data=data, guild=guild, state=state)
+
+
+async def test_manage_server_is_read_from_discord_not_the_cache(bot):  # noqa: F811
+    from bot.permissions import is_admin, is_moderator
+
+    manage_server = discord.Permissions(manage_guild=True).value
+    member = interaction_member(bot, manage_server)
+    assert member.guild_permissions.manage_guild is False  # the bug: computed from an empty cache
+    assert is_admin(member)  # the fix: Discord's own answer
+    assert not is_admin(interaction_member(bot, discord.Permissions(send_messages=True).value))
+
+
+async def test_mod_role_works_before_roles_are_cached(bot):  # noqa: F811
+    from bot.permissions import is_moderator
+
+    await bot.db.add_mod_role(555, 777)
+    plain = discord.Permissions(send_messages=True).value
+    assert await is_moderator(bot, interaction_member(bot, plain, roles=("777",)))
+    assert not await is_moderator(bot, interaction_member(bot, plain, roles=("888",)))
+
+
+async def test_commands_explain_when_the_bot_is_not_in_the_server(bot):  # noqa: F811
+    interaction = FakeInteraction(type("G", (), {"id": 999})(), type("U", (), {"id": 5})())
+    interaction.client = bot
+    assert await bot.tree.interaction_check(interaction) is False
+    text = interaction.response.sent[0][0][0]
+    assert "not in this server" in text and "Add to Server" in text
+
+
+def test_commands_are_server_only(bot):  # noqa: F811
+    assert bot.tree.allowed_installs.guild and not bot.tree.allowed_installs.user
+    payload = bot.tree.get_command("setup").to_dict(bot.tree)
+    assert payload.get("integration_types") == [0]

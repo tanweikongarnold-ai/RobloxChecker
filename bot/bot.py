@@ -26,7 +26,24 @@ INVITE_PERMISSIONS = discord.Permissions(view_channel=True, send_messages=True, 
 
 
 def invite_link(app_id: int) -> str:
-    return discord.utils.oauth_url(app_id, permissions=INVITE_PERMISSIONS, scopes=("bot", "applications.commands"))
+    # integration_type=0 means "add to a server" (not "Add to My Apps", which never puts the bot in the server).
+    url = discord.utils.oauth_url(app_id, permissions=INVITE_PERMISSIONS, scopes=("bot", "applications.commands"))
+    return url + "&integration_type=0"
+
+
+class Tree(app_commands.CommandTree):
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Stop early, with the fix, when the bot itself isn't in the server the command came from."""
+        if interaction.guild_id is None or self.client.get_guild(interaction.guild_id) is not None:
+            return True
+        link = invite_link(self.client.user.id) if self.client.user else "the link in the bot's window"
+        await interaction.response.send_message(
+            "I'm not in this server yet, so I can't see its roles or channels.\n"
+            f"Add me with this link and choose **Add to Server** (not *Add to My Apps*):\n{link}\n"
+            "If you only just started me or added me, wait 10 seconds and try again.",
+            ephemeral=True,
+        )
+        return False
 
 
 class RobloxCheckerBot(commands.Bot):
@@ -36,6 +53,10 @@ class RobloxCheckerBot(commands.Bot):
             intents=discord.Intents.default(),
             help_command=None,
             allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, users=True),
+            tree_cls=Tree,
+            # Only offer the commands inside servers that added the bot.
+            allowed_installs=app_commands.AppInstallationType(guild=True, user=False),
+            allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=False, private_channel=False),
         )
         self.settings = settings
         self.db = Database(settings.database_path)

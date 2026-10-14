@@ -25,10 +25,23 @@ class NotAdmin(app_commands.CheckFailure):
     pass
 
 
+def member_permissions(member: discord.Member) -> discord.Permissions:
+    """The member's permissions as Discord reported them with the interaction.
+
+    Discord sends these with every slash command and button click, so they're
+    right even when the bot's own copy of the server (roles, owner) is missing
+    or still loading. Fall back to computing them from that copy otherwise.
+    """
+    resolved = member.resolved_permissions
+    if resolved is not None and resolved.value:
+        return resolved
+    return member.guild_permissions
+
+
 def is_admin(member: discord.abc.User) -> bool:
     if not isinstance(member, discord.Member):
         return False
-    perms = member.guild_permissions
+    perms = member_permissions(member)
     return perms.administrator or perms.manage_guild
 
 
@@ -39,8 +52,10 @@ async def is_moderator(bot: "RobloxCheckerBot", member: discord.abc.User) -> boo
         return True
     mod_roles = await bot.db.get_mod_roles(member.guild.id)
     if mod_roles:
-        return any(role.id in mod_roles for role in member.roles)
-    perms = member.guild_permissions
+        # _roles holds the member's role IDs straight from Discord, even if the roles aren't cached yet.
+        role_ids = {role.id for role in member.roles} | set(getattr(member, "_roles", ()))
+        return any(role_id in mod_roles for role_id in role_ids)
+    perms = member_permissions(member)
     return perms.moderate_members or perms.kick_members or perms.ban_members
 
 

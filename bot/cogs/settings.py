@@ -53,7 +53,7 @@ class Settings(commands.Cog):
                 allowed_mentions=NO_MENTIONS,
             )
             return
-        if not guild.me.guild_permissions.manage_channels:
+        if not interaction.app_permissions.manage_channels:
             await interaction.response.send_message(
                 "I need the **Manage Channels** permission to create my channels. Kick me and add me again with the "
                 "link from the bot's window, or make the channels yourself and use `/config channels`.",

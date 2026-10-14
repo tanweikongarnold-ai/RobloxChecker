@@ -175,9 +175,10 @@ class FakeFollowup:
 
 
 class FakeInteraction:
-    def __init__(self, guild, user):
+    def __init__(self, guild, user, app_permissions=None):
         self.guild, self.guild_id, self.user = guild, guild.id, user
         self.response, self.followup = FakeResponse(), FakeFollowup()
+        self.app_permissions = app_permissions if app_permissions is not None else discord.Permissions.all()
 
 
 def use_fake_roblox(bot, client):

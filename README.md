@@ -32,7 +32,7 @@ The web queue is separate from the Discord bot's database: cases opened in one d
 2. **Download this project.** Click [this ZIP link](https://github.com/tanweikongarnold-ai/RobloxChecker/archive/refs/heads/claude/funny-pascal-tvz0kv.zip) and unzip it.
 3. **Start it.** In the unzipped folder, double-click **`start.bat`** (Windows) or **`start.command`** (Mac). The first time, it sets itself up and asks you to paste your token.
    If it says Python is missing, install it from <https://www.python.org/downloads/> (on Windows, tick **"Add python.exe to PATH"**) and double-click again.
-4. **Add it to your server.** When the window says the bot is online, it shows an invite link. Open it and pick your server.
+4. **Add it to your server.** When the window says the bot is online, it shows an invite link. Open it, choose **Add to Server** (not *Add to My Apps*) and pick your server.
 5. **In your server, type `/setup`.** Pick your moderator role. The bot creates its channels (`#alt-review`, `#mod-log`, `#badge-tracking`) that only admins and mods can see.
 
 Done. Type `/check` and paste a Roblox profile link.
