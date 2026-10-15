@@ -11,6 +11,7 @@ from discord.ext import commands
 
 from .config import Settings, forget_env_value
 from .db import Database
+from .friends import FriendChecker
 from .permissions import NotAdmin, NotModerator
 from .roblox import GroupNotFound, RobloxClient, RobloxError, UserNotFound
 from .scanner import FilterRegistry, Scanner
@@ -63,6 +64,7 @@ class RobloxCheckerBot(commands.Bot):
         self.roblox = RobloxClient(max_badges=settings.max_badges)
         self.filters = FilterRegistry(self.db)
         self.scanner = Scanner(self.roblox, self.db, self.filters)
+        self.friends = FriendChecker(self.roblox)
         self.cases = CaseService(self)
         self._greeted = False
 

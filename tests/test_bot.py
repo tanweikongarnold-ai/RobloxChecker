@@ -184,6 +184,7 @@ class FakeInteraction:
 def use_fake_roblox(bot, client):
     bot.roblox = client
     bot.scanner.roblox = client
+    bot.friends.roblox = client
 
 
 async def test_check_command_opens_case_and_reuses_it(bot):

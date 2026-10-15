@@ -38,6 +38,7 @@ AUDIT_VERBS = {
     "config": "⚙️ changed setting",
     "groupscan": "🔎 scanned the group",
     "groupscan.cases": "📂 opened cases from a scan of",
+    "friends.cases": "📂 opened cases for flagged friends of",
 }
 
 

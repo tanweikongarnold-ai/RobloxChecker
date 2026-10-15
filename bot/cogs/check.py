@@ -9,9 +9,9 @@ from discord import app_commands
 from discord.ext import commands
 
 from .. import embeds
+from ..check_pages import CheckPagesView
 from ..db import parse_ts
 from ..permissions import moderator_only
-from ..views import profile_view
 
 if TYPE_CHECKING:
     from ..bot import RobloxCheckerBot
@@ -44,18 +44,15 @@ class Check(commands.Cog):
             case = await self.bot.db.find_open_case(guild.id, account.user_id)
 
         watching = await self.bot.db.get_watch(guild.id, account.user_id) is not None
-        view = profile_view(
-            account.user_id,
-            show_case=case is None,
-            show_track=not watching,
-            show_trust=not result.trusted,
+        # Three pages: overview now; friends get checked in the background; groups & badges.
+        view = await CheckPagesView.create(
+            self.bot, guild, result, case,
+            show_case=case is None, show_track=not watching, show_trust=not result.trusted,
         )
-        await interaction.followup.send(
-            content=notice,
-            embed=embeds.scan_embed(result, open_case=case),
-            view=view,
-            ephemeral=not public,
+        view.message = await interaction.followup.send(
+            content=notice, embed=view.embed(), view=view, ephemeral=not public, wait=True
         )
+        view.start()
         await self.bot.db.log(
             guild.id,
             interaction.user.id,

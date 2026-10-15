@@ -236,6 +236,73 @@ class RobloxClient:
         data = await self._request("GET", f"https://inventory.roblox.com/v1/users/{user_id}/can-view-inventory")
         return data.get("canView")
 
+    # --------------------------------------------------------------- friends
+
+    async def get_friend_ids(self, user_id: int, limit: int = 1000) -> list[int]:
+        """IDs of a player's friends ("connections"), up to ``limit``.
+
+        Roblox pages these through ``/friends/find`` now; the older ``/friends``
+        list is the fallback (it still returns the IDs, if not always names).
+        """
+        ids: list[int] = []
+        try:
+            cursor = ""
+            while len(ids) < limit:
+                params = {"limit": 50}
+                if cursor:
+                    params["cursor"] = cursor
+                page = await self._request("GET", f"https://friends.roblox.com/v1/users/{user_id}/friends/find", params=params)
+                items = page.get("PageItems") or page.get("pageItems") or []
+                ids += [int(item["id"]) for item in items if isinstance(item, dict) and item.get("id")]
+                cursor = page.get("NextCursor") or page.get("nextCursor") or ""
+                if not cursor or not items:
+                    break
+        except _HTTPStatus:
+            ids = []
+        if not ids:
+            data = await self._request("GET", f"https://friends.roblox.com/v1/users/{user_id}/friends")
+            ids = [int(f["id"]) for f in data.get("data") or [] if isinstance(f, dict) and f.get("id")]
+        return list(dict.fromkeys(ids))[:limit]
+
+    async def get_users_basic(self, user_ids: list[int]) -> dict[int, tuple[str, str]]:
+        """``{id: (username, display name)}`` for many users, 100 per request."""
+        names: dict[int, tuple[str, str]] = {}
+        for start in range(0, len(user_ids), 100):
+            data = await self._request(
+                "POST",
+                "https://users.roblox.com/v1/users",
+                json={"userIds": user_ids[start : start + 100], "excludeBannedUsers": False},
+            )
+            for item in data.get("data") or []:
+                if item.get("id"):
+                    names[int(item["id"])] = (item.get("name") or "", item.get("displayName") or item.get("name") or "")
+        return names
+
+    async def fetch_brief(self, user_id: int) -> AccountData:
+        """A quick look for bulk checks: profile, bio, age and the first badge page.
+
+        Friends, groups and the rest stay ``None`` (unknown), so the scorer skips them.
+        """
+        user = await self.get_user(user_id)
+        account = AccountData(
+            user_id=int(user["id"]),
+            username=user.get("name") or str(user_id),
+            display_name=user.get("displayName") or user.get("name") or "",
+            description=user.get("description") or "",
+            created=parse_roblox_time(user.get("created")),
+            is_banned=bool(user.get("isBanned")),
+            verified=bool(user.get("hasVerifiedBadge")),
+        )
+        badge_result = await self._optional(self.get_badges(user_id, 100), None)
+        if badge_result is None:
+            account.badges_hidden = True
+        else:
+            account.badges, account.badges_hidden, account.badges_truncated = badge_result
+            if not account.badges and not account.badges_hidden:
+                # An empty list can mean a private inventory; don't call that "0 badges".
+                account.badges_hidden = await self._optional(self.can_view_inventory(user_id)) is False
+        return account
+
     # ---------------------------------------------------------------- groups
 
     async def resolve_group_id(self, query: str) -> int:

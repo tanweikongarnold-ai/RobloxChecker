@@ -15,6 +15,8 @@ from .models import AccountData
 from .scanner import ScanResult
 
 if TYPE_CHECKING:
+    from .content_filter import Hit
+    from .friends import FriendCheck, FriendsReport
     from .group_scan import GroupScanReport, MemberScan
 
 RED = discord.Colour.from_rgb(220, 53, 69)
@@ -79,7 +81,7 @@ def scan_colour(result: ScanResult) -> discord.Colour:
     return GREEN
 
 
-def scan_embed(result: ScanResult, *, open_case: Case | None = None) -> discord.Embed:
+def scan_embed(result: ScanResult, *, open_case: Case | None = None, page_label: str | None = None) -> discord.Embed:
     account, alt, nsfw = result.account, result.alt, result.nsfw
     name = discord.utils.escape_markdown(account.username)
     title = f"{account.display_name} (@{account.username})" if account.display_name != account.username else name
@@ -162,7 +164,8 @@ def scan_embed(result: ScanResult, *, open_case: Case | None = None) -> discord.
         if nsfw.hits:
             bio = f"||{bio}||"
         embed.add_field(name="About", value=clip(bio, 400), inline=False)
-    embed.set_footer(text="Scores are hints for moderators, not proof. Always review before acting.")
+    prefix = f"{page_label} · " if page_label else ""
+    embed.set_footer(text=prefix + "Scores are hints for moderators, not proof. Always review before acting.")
     embed.timestamp = account.fetched_at
     return embed
 
@@ -414,4 +417,175 @@ def group_scan_embed(report: "GroupScanReport", open_cases: dict[int, int] | Non
     if not (nsfw or alts or suspicious):
         embed.add_field(name="Result", value="Nobody here crossed your thresholds. 🎉", inline=False)
     embed.set_footer(text="Scores are hints, not proof. Use /check on anyone for the full breakdown.")
+    return embed
+
+
+# ------------------------------------------------------------ /check pages 2 & 3
+
+FRIEND_ICONS = {"nsfw": "🔞", "alt": "🕵️", "suspicious": "⚠️", "new": "🆕", "ok": "✅", "trusted": "🛡️"}
+FRIENDS_PER_PAGE = 15
+
+
+def age_text(days: int | None) -> str:
+    if days is None:
+        return "age unknown"
+    if days < 60:
+        return f"{days}d old"
+    if days < 730:
+        return f"{days // 30}mo old"
+    return f"{days // 365}y old"
+
+
+def _profile_link(user_id: int, username: str, display_name: str = "") -> str:
+    name = discord.utils.escape_markdown(username)
+    label = f"{discord.utils.escape_markdown(display_name)} (@{name})" if display_name and display_name != username else f"@{name}"
+    return f"[{label}](https://www.roblox.com/users/{user_id}/profile)"
+
+
+def friend_line(check: "FriendCheck", suspicious_threshold: int) -> str:
+    account, result = check.account, check.result
+    parts = [f"{FRIEND_ICONS[check.kind]} {_profile_link(account.user_id, account.username, account.display_name)}"]
+    if result.nsfw.hits:
+        top = result.nsfw.hits[0]
+        match = f" ||{discord.utils.escape_markdown(top.matched)}||" if top.matched and top.matched != top.label else ""
+        parts.append(f"NSFW **{result.nsfw.score}**{match}")
+    if result.alt.score >= suspicious_threshold:
+        parts.append(f"alt **{result.alt.score}**")
+    parts.append(age_text(account.age_days()))
+    if account.badges_hidden:
+        parts.append("badges private")
+    else:
+        parts.append(f"{len(account.badges)}{'+' if account.badges_truncated else ''} badges")
+    if account.is_banned:
+        parts.append("banned")
+    if check.open_case:
+        parts.append(f"case #{check.open_case}")
+    return " · ".join(parts)
+
+
+def friends_page_count(report: "FriendsReport | None") -> int:
+    if report is None:
+        return 1
+    rows = len(report.checks) + len(report.data.unchecked)
+    return max(1, -(-rows // FRIENDS_PER_PAGE))
+
+
+def friends_embed(
+    account: AccountData,
+    report: "FriendsReport | None",
+    *,
+    sub_page: int = 0,
+    progress: tuple[int, int] | None = None,
+    error: str | None = None,
+    page_label: str = "Page 2/3",
+) -> discord.Embed:
+    embed = discord.Embed(title=clip(f"Friends · {account.username}", 256), url=account.profile_url, colour=BLUE)
+    if account.avatar_url:
+        embed.set_thumbnail(url=account.avatar_url)
+    if error:
+        embed.description = f"Couldn't load their friends: {error}"
+        embed.set_footer(text=page_label)
+        return embed
+    if report is None:
+        if progress:
+            done, total = progress
+            embed.description = f"⏳ Checking their friends… **{done}/{total}** done.\nThis page updates by itself."
+        else:
+            embed.description = "⏳ Loading their friend list…"
+        embed.set_footer(text=page_label)
+        return embed
+
+    data = report.data
+    if not data.total:
+        embed.description = "They have no friends on Roblox (or their friend list is empty)."
+        embed.set_footer(text=page_label)
+        return embed
+
+    summary = [
+        f"**{data.total}** friends · quick check on **{len(report.checks)}** (age, badges, name and bio)",
+        f"🔞 **{report.count('nsfw')}** NSFW · 🕵️ **{report.count('alt')}** likely alts · ⚠️ **{report.count('suspicious')}** suspicious · "
+        f"🆕 **{report.count('new')}** under 30 days · ✅ **{report.count('ok')}** look fine",
+    ]
+    if report.count("trusted"):
+        summary.append(f"🛡️ {report.count('trusted')} trusted")
+    alts = sum(1 for c in report.checks if c.result.alt.score >= report.config.alt_threshold and c.kind != "trusted")
+    if alts >= 3 and report.alt_share >= 0.3:
+        summary.append(f"**{report.alt_share:.0%} of their friends look like alts.** Alt accounts often friend each other.")
+    if data.unchecked:
+        summary.append(f"Only the first {len(report.checks) + data.failed} were checked; the other {len(data.unchecked)} are listed by name at the end.")
+    if data.failed:
+        summary.append(f"❔ {data.failed} couldn't be checked.")
+
+    rows = [friend_line(c, report.config.suspicious_threshold) for c in report.checks]
+    rows += [f"• {_profile_link(fid, name, display)} (not checked)" for fid, name, display in data.unchecked]
+    pages = friends_page_count(report)
+    sub_page = max(0, min(sub_page, pages - 1))
+    chunk = rows[sub_page * FRIENDS_PER_PAGE : (sub_page + 1) * FRIENDS_PER_PAGE]
+    embed.description = clip("\n".join(summary) + "\n\n" + "\n".join(chunk), 4096)
+    more = f" · friends {sub_page + 1}/{pages}" if pages > 1 else ""
+    embed.set_footer(text=f"{page_label}{more} · Quick checks are hints. Use /check on a friend for the full picture.")
+    return embed
+
+
+def groups_badges_embed(
+    result: ScanResult, group_hits: dict[int, list["Hit"]], *, page_label: str = "Page 3/3"
+) -> discord.Embed:
+    account = result.account
+    embed = discord.Embed(title=clip(f"Groups & badges · {account.username}", 256), url=account.profile_url, colour=BLUE)
+    if account.avatar_url:
+        embed.set_thumbnail(url=account.avatar_url)
+
+    if account.groups is None:
+        embed.add_field(name="Groups", value="Couldn't load their groups.", inline=False)
+    elif not account.groups:
+        embed.add_field(name="Groups (0)", value="Not in any groups.", inline=False)
+    else:
+        flagged = [g for g in account.groups if group_hits.get(g.id)]
+        normal = [g for g in account.groups if not group_hits.get(g.id)]
+        lines = []
+        for g in flagged:
+            hit = group_hits[g.id][0]
+            match = f" ||{discord.utils.escape_markdown(hit.matched)}||" if hit.matched and hit.matched != hit.label else ""
+            lines.append(f"🔞 [{discord.utils.escape_markdown(g.name)}](https://www.roblox.com/communities/{g.id}) · {discord.utils.escape_markdown(hit.label)}{match}")
+        for g in sorted(normal, key=lambda g: -(g.member_count or 0)):
+            members = f" · {g.member_count:,} members" if g.member_count else ""
+            role = f" · {discord.utils.escape_markdown(g.role)}" if g.role else ""
+            lines.append(f"• [{discord.utils.escape_markdown(g.name)}](https://www.roblox.com/communities/{g.id}){role}{members}")
+        title = f"Groups ({len(account.groups)})" + (f" · 🔞 {len(flagged)} look NSFW" if flagged else "")
+        embed.add_field(name=title, value=_lines(lines), inline=False)
+
+    if account.badges_hidden:
+        embed.add_field(name="Badges", value="🔒 Their badges are private.", inline=False)
+    elif not account.badges:
+        embed.add_field(name="Badges", value="No badges.", inline=False)
+    else:
+        stats = result.alt.badge_stats
+        count = f"{stats.total}+" if account.badges_truncated else str(stats.total)
+        facts = [f"**{count}** badges from **{stats.distinct_games}** games"]
+        if stats.first_awarded:
+            facts.append(f"First earned {ts(stats.first_awarded, 'D')} · latest {ts(stats.last_awarded)}")
+        if stats.total >= 5:
+            facts.append(f"Busiest 24 hours: {stats.busiest_day_share:.0%} of badges · last 2 weeks: {stats.recent_share:.0%}")
+        embed.add_field(name="Badges", value=_lines(facts), inline=False)
+        dated = sorted((b for b in account.badges if b.awarded_at), key=lambda b: b.awarded_at, reverse=True)
+        recent = dated[:10] or account.badges[:10]
+        embed.add_field(
+            name="Most recent badges",
+            value=_lines(
+                f"[{discord.utils.escape_markdown(clip(b.name, 60))}](https://www.roblox.com/badges/{b.id})"
+                + (f" · {ts(b.awarded_at, 'd')}" if b.awarded_at else "")
+                for b in recent
+            ),
+            inline=False,
+        )
+
+    if account.username_history:
+        embed.add_field(
+            name=f"Past usernames ({len(account.username_history)})",
+            value=clip(", ".join(discord.utils.escape_markdown(n) for n in account.username_history), 1024),
+            inline=False,
+        )
+    if account.legacy_badges:
+        embed.add_field(name="Roblox badges", value=clip(", ".join(account.legacy_badges), 1024), inline=False)
+    embed.set_footer(text=page_label)
     return embed
