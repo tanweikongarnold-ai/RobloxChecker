@@ -10,8 +10,8 @@ import discord
 
 from .alt_detector import LIKELY_ALT, SUSPICIOUS
 from .content_filter import Hit, NsfwReport
-from .db import Case, Note, WatchEntry
-from .models import AccountData
+from .db import Case, Note, WatchEntry, parse_ts
+from .models import AccountData, utcnow
 from .scanner import ScanResult
 
 if TYPE_CHECKING:
@@ -588,4 +588,75 @@ def groups_badges_embed(
     if account.legacy_badges:
         embed.add_field(name="Roblox badges", value=clip(", ".join(account.legacy_badges), 1024), inline=False)
     embed.set_footer(text=page_label)
+    return embed
+
+
+# ------------------------------------------------------------------ /database
+
+def database_summary_embed(server: str, counts: dict[str, int]) -> discord.Embed:
+    embed = discord.Embed(title=clip(f"Saved data · {server}", 256), colour=BLUE)
+    embed.description = (
+        "Everything the bot has looked at or your team has done in this server.\n"
+        "Use `/database export` for an Excel file with all of it."
+    )
+    embed.add_field(
+        name="👤 Players",
+        value=(
+            f"**{counts['players']:,}** saved ({counts['full']:,} full checks, {counts['players'] - counts['full']:,} quick friend checks)\n"
+            f"🔞 {counts['nsfw']:,} NSFW · 🕵️ {counts['alts']:,} likely alts\n"
+            "`/database players`"
+        ),
+        inline=False,
+    )
+    embed.add_field(name="🏷️ Groups scanned", value=f"**{counts['groups']:,}**\n`/database groups`", inline=True)
+    embed.add_field(
+        name="📂 Cases",
+        value=f"**{counts['cases']:,}** ({counts['open_cases']:,} open) · {counts['notes']:,} notes\n`/case list`",
+        inline=True,
+    )
+    embed.add_field(
+        name="Other",
+        value=(
+            f"📈 {counts['tracked']:,} tracked · 🛡️ {counts['trusted']:,} trusted · 🔤 {counts['terms']:,} filter changes · "
+            f"📝 {counts['activity']:,} logged actions"
+        ),
+        inline=False,
+    )
+    embed.set_footer(text="Stored in data/robloxchecker.db on the computer running the bot.")
+    return embed
+
+
+def players_list_embed(rows: list, *, show: str, search: str | None, page: int, pages: int, total: int) -> discord.Embed:
+    titles = {"all": "Saved players", "flagged": "Flagged players", "nsfw": "NSFW players", "alts": "Likely alts"}
+    title = titles.get(show, "Saved players") + (f" matching “{search}”" if search else "")
+    embed = discord.Embed(title=clip(title, 256), colour=BLUE)
+    lines = []
+    for r in rows:
+        flags = r["flags"].split(",") if r["flags"] else []
+        icon = ("🔞" if "nsfw" in flags else "") + ("🕵️" if "alt" in flags else "") or "✅"
+        created = parse_ts(r["account_created"]) if r["account_created"] else None
+        age = age_text((utcnow() - created).days) if created else "age unknown"
+        quick = " (quick)" if r["depth"] == "quick" else ""
+        lines.append(
+            f"{icon} {_profile_link(r['roblox_id'], r['username'], r['display_name'] or '')} · alt **{r['alt_score']}** · "
+            f"NSFW **{r['nsfw_score']}** · {age} · {discord.utils.escape_markdown(clip(r['found_via'], 40))}{quick} · {ts(parse_ts(r['last_checked']))}"
+        )
+    embed.description = clip("\n".join(lines), 4096) if lines else "Nothing saved yet. Players appear here after `/check`, `/groupscan` or tracking."
+    embed.set_footer(text=f"Page {page}/{pages} · {total:,} player(s) · newest first" if show == "all" else f"Page {page}/{pages} · {total:,} player(s) · worst first")
+    return embed
+
+
+def groups_list_embed(rows: list, *, page: int, pages: int, total: int) -> discord.Embed:
+    embed = discord.Embed(title="Scanned groups", colour=BLUE)
+    lines = []
+    for r in rows:
+        members = f"{r['member_count']:,} members" if r["member_count"] else "members unknown"
+        nsfw_name = " · 🔞 name/description" if r["nsfw_score"] else ""
+        lines.append(
+            f"[{discord.utils.escape_markdown(clip(r['name'], 60))}](https://www.roblox.com/communities/{r['group_id']}) · {members} · "
+            f"checked {r['members_checked']}: 🔞 {r['nsfw_members']} · 🕵️ {r['alt_members']} · ⚠️ {r['suspicious_members']}"
+            f"{nsfw_name} · {ts(parse_ts(r['last_scanned']))}"
+        )
+    embed.description = clip("\n".join(lines), 4096) if lines else "No groups scanned yet. Use `/groupscan`."
+    embed.set_footer(text=f"Page {page}/{pages} · {total:,} group(s) · most recent first")
     return embed

@@ -52,6 +52,17 @@ python -m bot        # asks for the token the first time, or put DISCORD_TOKEN i
 Set `DEV_GUILD_ID` in `.env` to your server's ID while testing and slash commands show up instantly there.
 </details>
 
+## Where your data is
+
+Everything is saved in one file, `data/robloxchecker.db`, on the computer running the bot. The easiest way to see it is in Discord:
+
+- `/database summary`: how much is saved
+- `/database players show:flagged`: browse players (also `nsfw`, `alts`, or search by name)
+- `/database groups`: every group you've scanned
+- `/database export`: an Excel file with all of it (opens in Excel or Google Sheets)
+
+To look at the raw file yourself, open `data/robloxchecker.db` with the free [DB Browser for SQLite](https://sqlitebrowser.org) and use the **Browse Data** tab. Back this file up if you care about the history; deleting it starts the bot fresh.
+
 ## Changing settings later
 
 `/setup` covers the basics. Anyone with **Manage Server** can fine-tune:
@@ -100,6 +111,7 @@ If an account keeps getting flagged but is actually fine (a friend's new account
 | `/setup [mod_role]` | One-step setup: creates the bot's private channels and sets your mod role. |
 | `/config show` · `channels` · `clear-channel` · `add-modrole` · `remove-modrole` · `thresholds` · `autoflag` | Server settings (Manage Server). |
 | `/audit [moderator] [limit]` | Recent moderator actions. |
+| `/database summary` · `players` · `groups` · `export` | See everything the bot has saved: every player it has checked (from `/check`, group scans, friend checks and tracking) and every group scanned. `players` can show only flagged, NSFW or alts and search by name or ID. `export` sends an Excel file with one tab each for players, groups, cases, notes, tracked, trusted, activity and filter words. |
 
 Every result includes a link to the player's Roblox profile. `/check` results have buttons to open a case, start tracking or mark the account as trusted.
 

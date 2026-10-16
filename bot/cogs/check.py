@@ -35,6 +35,9 @@ class Check(commands.Cog):
         result = await self.bot.scanner.scan(guild.id, user)
         account = result.account
         config = await self.bot.db.get_config(guild.id)
+        await self.bot.db.save_players(
+            guild.id, [result.record(config, depth="full", found_via="/check", checked_by=interaction.user.id)]
+        )
 
         notice = None
         if config.auto_flag and result.flag_reasons(config) and not result.trusted:
@@ -48,6 +51,7 @@ class Check(commands.Cog):
         view = await CheckPagesView.create(
             self.bot, guild, result, case,
             show_case=case is None, show_track=not watching, show_trust=not result.trusted,
+            checked_by=interaction.user.id,
         )
         view.message = await interaction.followup.send(
             content=notice, embed=view.embed(), view=view, ephemeral=not public, wait=True

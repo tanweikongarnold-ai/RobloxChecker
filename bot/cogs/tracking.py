@@ -80,6 +80,10 @@ class Tracking(commands.Cog):
         async with self._lock:  # don't let a manual /track now race the background loop
             account = await self.bot.scanner.fetch(entry.roblox_id, fresh=True)
             result = await self.bot.scanner.analyse(guild.id, account)
+            config = await self.bot.db.get_config(guild.id)
+            await self.bot.db.save_players(
+                guild.id, [result.record(config, depth="full", found_via="tracking", checked_by=None)]
+            )
             first_scan = entry.last_checked_at is None
             was_hidden = entry.last_badge_count == HIDDEN
 

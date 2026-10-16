@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 import aiosqlite
 
@@ -122,6 +122,54 @@ CREATE TABLE IF NOT EXISTS trusted_accounts (
     added_by    INTEGER NOT NULL,
     added_at    TEXT    NOT NULL,
     PRIMARY KEY (guild_id, roblox_id)
+);
+
+CREATE TABLE IF NOT EXISTS players (
+    guild_id        INTEGER NOT NULL,
+    roblox_id       INTEGER NOT NULL,
+    username        TEXT    NOT NULL,
+    display_name    TEXT,
+    account_created TEXT,
+    is_banned       INTEGER NOT NULL DEFAULT 0,
+    verified        INTEGER NOT NULL DEFAULT 0,
+    badges          INTEGER,
+    badges_more     INTEGER NOT NULL DEFAULT 0,
+    friends         INTEGER,
+    followers       INTEGER,
+    groups_count    INTEGER,
+    bio             TEXT,
+    alt_score       INTEGER NOT NULL,
+    alt_verdict     TEXT    NOT NULL,
+    nsfw_score      INTEGER NOT NULL,
+    nsfw_matches    TEXT,
+    flags           TEXT    NOT NULL DEFAULT '',
+    depth           TEXT    NOT NULL,
+    found_via       TEXT    NOT NULL,
+    first_seen      TEXT    NOT NULL,
+    last_checked    TEXT    NOT NULL,
+    times_seen      INTEGER NOT NULL DEFAULT 1,
+    last_checked_by INTEGER,
+    PRIMARY KEY (guild_id, roblox_id)
+);
+CREATE INDEX IF NOT EXISTS players_by_checked ON players (guild_id, last_checked);
+
+CREATE TABLE IF NOT EXISTS roblox_groups (
+    guild_id           INTEGER NOT NULL,
+    group_id           INTEGER NOT NULL,
+    name               TEXT    NOT NULL,
+    member_count       INTEGER,
+    owner              TEXT,
+    nsfw_score         INTEGER NOT NULL DEFAULT 0,
+    nsfw_matches       TEXT,
+    members_checked    INTEGER NOT NULL DEFAULT 0,
+    nsfw_members       INTEGER NOT NULL DEFAULT 0,
+    alt_members        INTEGER NOT NULL DEFAULT 0,
+    suspicious_members INTEGER NOT NULL DEFAULT 0,
+    first_scanned      TEXT    NOT NULL,
+    last_scanned       TEXT    NOT NULL,
+    times_scanned      INTEGER NOT NULL DEFAULT 1,
+    last_scanned_by    INTEGER,
+    PRIMARY KEY (guild_id, group_id)
 );
 
 CREATE TABLE IF NOT EXISTS guild_terms (
@@ -274,8 +322,9 @@ class Database:
             await self._conn.close()
             self._conn = None
 
-    async def _write(self, sql: str, params: Iterable[Any] = ()) -> aiosqlite.Cursor:
-        cursor = await self.conn.execute(sql, tuple(params))
+    async def _write(self, sql: str, params: Iterable[Any] | Mapping[str, Any] = ()) -> aiosqlite.Cursor:
+        # Named parameters (a dict) must stay a dict; tuple() would keep only the keys.
+        cursor = await self.conn.execute(sql, params if isinstance(params, Mapping) else tuple(params))
         await self.conn.commit()
         return cursor
 
@@ -710,3 +759,146 @@ class Database:
             "SELECT * FROM guild_terms WHERE guild_id = ? ORDER BY term", (guild_id,)
         ) as cur:
             return list(await cur.fetchall())
+
+    # ---------------------------------------------- saved players & groups
+
+    async def save_players(self, guild_id: int, records: list[dict[str, Any]]) -> None:
+        """Remember every account the bot has looked at (one row per account, updated each time).
+
+        ``records`` come from :meth:`ScanResult.record`. A quick look (a friend
+        on page 2 of /check) never overwrites the results of a full check.
+        """
+        if not records:
+            return
+        now = _now()
+        keep = "(excluded.depth = 'quick' AND players.depth = 'full')"
+        scored = ("badges", "badges_more", "friends", "followers", "groups_count", "alt_score", "alt_verdict",
+                  "nsfw_score", "nsfw_matches", "flags", "depth")
+        updates = ",\n".join(f"{col} = CASE WHEN {keep} THEN players.{col} ELSE excluded.{col} END" for col in scored)
+        await self.conn.executemany(
+            f"""
+            INSERT INTO players (
+                guild_id, roblox_id, username, display_name, account_created, is_banned, verified, badges, badges_more,
+                friends, followers, groups_count, bio, alt_score, alt_verdict, nsfw_score, nsfw_matches, flags, depth,
+                found_via, first_seen, last_checked, times_seen, last_checked_by
+            ) VALUES (
+                :guild_id, :roblox_id, :username, :display_name, :account_created, :is_banned, :verified, :badges,
+                :badges_more, :friends, :followers, :groups_count, :bio, :alt_score, :alt_verdict, :nsfw_score,
+                :nsfw_matches, :flags, :depth, :found_via, :now, :now, 1, :checked_by
+            )
+            ON CONFLICT (guild_id, roblox_id) DO UPDATE SET
+                username = excluded.username,
+                display_name = excluded.display_name,
+                account_created = COALESCE(excluded.account_created, players.account_created),
+                is_banned = excluded.is_banned,
+                verified = excluded.verified,
+                bio = excluded.bio,
+                last_checked = excluded.last_checked,
+                times_seen = players.times_seen + 1,
+                last_checked_by = COALESCE(excluded.last_checked_by, players.last_checked_by),
+                {updates}
+            """,
+            [{**record, "guild_id": guild_id, "now": now} for record in records],
+        )
+        await self.conn.commit()
+
+    async def save_group(self, guild_id: int, record: dict[str, Any]) -> None:
+        now = _now()
+        await self._write(
+            """
+            INSERT INTO roblox_groups (
+                guild_id, group_id, name, member_count, owner, nsfw_score, nsfw_matches, members_checked,
+                nsfw_members, alt_members, suspicious_members, first_scanned, last_scanned, times_scanned, last_scanned_by
+            ) VALUES (
+                :guild_id, :group_id, :name, :member_count, :owner, :nsfw_score, :nsfw_matches, :members_checked,
+                :nsfw_members, :alt_members, :suspicious_members, :now, :now, 1, :scanned_by
+            )
+            ON CONFLICT (guild_id, group_id) DO UPDATE SET
+                name = excluded.name, member_count = excluded.member_count, owner = excluded.owner,
+                nsfw_score = excluded.nsfw_score, nsfw_matches = excluded.nsfw_matches,
+                members_checked = excluded.members_checked, nsfw_members = excluded.nsfw_members,
+                alt_members = excluded.alt_members, suspicious_members = excluded.suspicious_members,
+                last_scanned = excluded.last_scanned, times_scanned = roblox_groups.times_scanned + 1,
+                last_scanned_by = excluded.last_scanned_by
+            """,
+            {**record, "guild_id": guild_id, "now": now},
+        )
+
+    @staticmethod
+    def _player_filter(guild_id: int, show: str, search: str | None) -> tuple[str, list[Any]]:
+        clauses, params = ["guild_id = ?"], [guild_id]
+        if show == "flagged":
+            clauses.append("flags != ''")
+        elif show == "nsfw":
+            clauses.append("flags LIKE '%nsfw%'")
+        elif show == "alts":
+            clauses.append("flags LIKE '%alt%'")
+        if search:
+            text = search.strip().lstrip("@")
+            clauses.append("(username LIKE ? OR display_name LIKE ? OR CAST(roblox_id AS TEXT) = ?)")
+            params += [f"%{text}%", f"%{text}%", text]
+        return " AND ".join(clauses), params
+
+    async def list_players(
+        self, guild_id: int, *, show: str = "all", search: str | None = None, limit: int = 15, offset: int = 0
+    ) -> list[aiosqlite.Row]:
+        where, params = self._player_filter(guild_id, show, search)
+        order = "MAX(nsfw_score, alt_score) DESC, last_checked DESC" if show != "all" else "last_checked DESC"
+        async with self.conn.execute(
+            f"SELECT * FROM players WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?", (*params, limit, offset)
+        ) as cur:
+            return list(await cur.fetchall())
+
+    async def count_players(self, guild_id: int, *, show: str = "all", search: str | None = None) -> int:
+        where, params = self._player_filter(guild_id, show, search)
+        async with self.conn.execute(f"SELECT COUNT(*) FROM players WHERE {where}", params) as cur:
+            return (await cur.fetchone())[0]
+
+    async def list_groups(self, guild_id: int, *, limit: int = 15, offset: int = 0) -> list[aiosqlite.Row]:
+        async with self.conn.execute(
+            "SELECT * FROM roblox_groups WHERE guild_id = ? ORDER BY last_scanned DESC LIMIT ? OFFSET ?",
+            (guild_id, limit, offset),
+        ) as cur:
+            return list(await cur.fetchall())
+
+    async def database_counts(self, guild_id: int) -> dict[str, int]:
+        queries = {
+            "players": "SELECT COUNT(*) FROM players WHERE guild_id = ?",
+            "flagged": "SELECT COUNT(*) FROM players WHERE guild_id = ? AND flags != ''",
+            "nsfw": "SELECT COUNT(*) FROM players WHERE guild_id = ? AND flags LIKE '%nsfw%'",
+            "alts": "SELECT COUNT(*) FROM players WHERE guild_id = ? AND flags LIKE '%alt%'",
+            "full": "SELECT COUNT(*) FROM players WHERE guild_id = ? AND depth = 'full'",
+            "groups": "SELECT COUNT(*) FROM roblox_groups WHERE guild_id = ?",
+            "cases": "SELECT COUNT(*) FROM cases WHERE guild_id = ?",
+            "open_cases": "SELECT COUNT(*) FROM cases WHERE guild_id = ? AND status = 'open'",
+            "notes": "SELECT COUNT(*) FROM case_notes JOIN cases ON cases.id = case_notes.case_id WHERE cases.guild_id = ?",
+            "tracked": "SELECT COUNT(*) FROM watchlist WHERE guild_id = ?",
+            "trusted": "SELECT COUNT(*) FROM trusted_accounts WHERE guild_id = ?",
+            "terms": "SELECT COUNT(*) FROM guild_terms WHERE guild_id = ?",
+            "activity": "SELECT COUNT(*) FROM audit_log WHERE guild_id = ?",
+        }
+        counts = {}
+        for key, sql in queries.items():
+            async with self.conn.execute(sql, (guild_id,)) as cur:
+                counts[key] = (await cur.fetchone())[0]
+        return counts
+
+    async def export_tables(self, guild_id: int, *, players: str = "all") -> dict[str, list[aiosqlite.Row]]:
+        """Everything this server has stored, table by table (for the Excel export)."""
+        player_where = "guild_id = ?" + ("" if players == "all" else " AND (flags != '' OR depth = 'full')")
+        queries = {
+            "players": f"SELECT * FROM players WHERE {player_where} ORDER BY flags = '', MAX(nsfw_score, alt_score) DESC",
+            "groups": "SELECT * FROM roblox_groups WHERE guild_id = ? ORDER BY last_scanned DESC",
+            "cases": _CASE_SELECT + "WHERE cases.guild_id = ? ORDER BY cases.id DESC",
+            "notes": """SELECT case_notes.*, cases.roblox_name FROM case_notes JOIN cases ON cases.id = case_notes.case_id
+                        WHERE cases.guild_id = ? ORDER BY case_notes.case_id DESC, case_notes.id""",
+            "watchlist": "SELECT * FROM watchlist WHERE guild_id = ? ORDER BY added_at DESC",
+            "trusted": "SELECT * FROM trusted_accounts WHERE guild_id = ? ORDER BY added_at DESC",
+            "activity": "SELECT * FROM audit_log WHERE guild_id = ? ORDER BY id DESC LIMIT 10000",
+            "terms": "SELECT * FROM guild_terms WHERE guild_id = ? ORDER BY term",
+        }
+        tables = {}
+        for key, sql in queries.items():
+            async with self.conn.execute(sql, (guild_id,)) as cur:
+                tables[key] = list(await cur.fetchall())
+        return tables

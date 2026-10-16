@@ -42,8 +42,10 @@ class CheckPagesView(discord.ui.View):
         show_case: bool,
         show_track: bool,
         show_trust: bool,
+        checked_by: int | None = None,
     ):
         super().__init__(timeout=840)
+        self.checked_by = checked_by
         self.bot = bot
         self.guild = guild
         self.result = result
@@ -60,7 +62,7 @@ class CheckPagesView(discord.ui.View):
         self._rebuild()
 
     @classmethod
-    async def create(cls, bot: "RobloxCheckerBot", guild: discord.Guild, result: ScanResult, open_case: Case | None, **show: bool):
+    async def create(cls, bot: "RobloxCheckerBot", guild: discord.Guild, result: ScanResult, open_case: Case | None, **show):
         content_filter = await bot.filters.get(guild.id)
         group_hits = {g.id: content_filter.scan_text(g.name, "group") for g in result.account.groups or []}
         return cls(bot, guild, result, open_case, group_hits, **show)
@@ -193,6 +195,11 @@ class CheckPagesView(discord.ui.View):
                 if not fetch.done() and self.page == "friends":
                     await self._refresh()  # show progress
             self.report = await analyse_friends(self.bot, self.guild.id, fetch.result())
+            found_via = f"friend of @{self.result.account.username}"
+            await self.bot.db.save_players(self.guild.id, [
+                c.result.record(self.report.config, depth="quick", found_via=found_via, checked_by=self.checked_by)
+                for c in self.report.checks
+            ])
         except RobloxError as exc:
             self.error = str(exc)
         except asyncio.CancelledError:

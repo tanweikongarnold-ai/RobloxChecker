@@ -184,9 +184,14 @@ async def test_three_pages_and_open_cases_for_friends(bot):  # noqa: F811
     assert view.embed().footer.text.startswith("Page 1/3")
     assert labels(view)[:3] == ["Overview", "Friends ⏳", "Groups & badges"]
 
+    view.checked_by = 5
     view.start()
     await view._loader
     assert labels(view)[1] == "Friends (40) · 14 flagged"
+    saved = await bot.db.list_players(1, search=str(ALT_FRIENDS[0]))
+    assert saved[0]["depth"] == "quick" and saved[0]["found_via"] == f"friend of @{main.account.username}"
+    assert saved[0]["last_checked_by"] == 5
+    assert await bot.db.count_players(1) == 39  # every friend that could be checked
     assert view.message.edits  # the finished check redrew the message
 
     await view._go("friends")(ClickInteraction(guild, 5))

@@ -131,6 +131,8 @@ class Groups(commands.Cog):
             await say("🔎 Looking up the group…")
             report = await scan_group(self.bot, interaction.guild.id, group, members, progress)
 
+        await self.bot.db.save_players(interaction.guild.id, report.player_records(interaction.user.id))
+        await self.bot.db.save_group(interaction.guild.id, report.group_record(interaction.user.id))
         if not report.scans:
             await say(f"**{discord.utils.escape_markdown(report.group.name)}** has no members to check.")
             return

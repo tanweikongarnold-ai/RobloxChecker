@@ -35,6 +35,35 @@ class ScanResult:
             reasons.append("nsfw")
         return reasons
 
+    def record(self, config: GuildConfig, *, depth: str, found_via: str, checked_by: int | None) -> dict[str, Any]:
+        """A row for the saved-players table (see ``Database.save_players``).
+
+        ``depth`` is "full" for /check, group scans and tracking, "quick" for friends on page 2.
+        """
+        account = self.account
+        return {
+            "roblox_id": account.user_id,
+            "username": account.username,
+            "display_name": account.display_name,
+            "account_created": account.created.isoformat() if account.created else None,
+            "is_banned": int(account.is_banned),
+            "verified": int(account.verified),
+            "badges": None if account.badges_hidden else len(account.badges),
+            "badges_more": int(account.badges_truncated),
+            "friends": account.friends,
+            "followers": account.followers,
+            "groups_count": None if account.groups is None else len(account.groups),
+            "bio": account.description[:1000],
+            "alt_score": self.alt.score,
+            "alt_verdict": self.alt.verdict,
+            "nsfw_score": self.nsfw.score,
+            "nsfw_matches": ", ".join(hit.label for hit in self.nsfw.hits[:8]),
+            "flags": ",".join(self.flag_reasons(config)),
+            "depth": depth,
+            "found_via": found_via[:200],
+            "checked_by": checked_by,
+        }
+
     def case_details(self) -> dict[str, Any]:
         """Snapshot stored with a case so moderators see what triggered it."""
         account = self.account

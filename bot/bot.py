@@ -20,7 +20,8 @@ from .views import CaseButton, ProfileButton
 
 log = logging.getLogger("robloxchecker")
 
-EXTENSIONS = ("bot.cogs.check", "bot.cogs.cases", "bot.cogs.tracking", "bot.cogs.settings", "bot.cogs.groups")
+EXTENSIONS = ("bot.cogs.check", "bot.cogs.cases", "bot.cogs.tracking", "bot.cogs.settings", "bot.cogs.groups",
+              "bot.cogs.database")
 
 # View Channels, Send Messages, Embed Links, Read Message History, and Manage Channels (for /setup).
 INVITE_PERMISSIONS = discord.Permissions(view_channel=True, send_messages=True, embed_links=True, read_message_history=True, manage_channels=True)

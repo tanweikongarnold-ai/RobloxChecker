@@ -75,6 +75,30 @@ class GroupScanReport:
     def failed(self) -> list[MemberScan]:
         return [s for s in self.scans if s.result is None]
 
+    def group_record(self, scanned_by: int | None) -> dict:
+        """A row for the saved-groups table (see ``Database.save_group``)."""
+        group = self.group
+        return {
+            "group_id": group.id,
+            "name": group.name,
+            "member_count": group.member_count,
+            "owner": group.owner_name,
+            "nsfw_score": self.group_nsfw.score,
+            "nsfw_matches": ", ".join(hit.label for hit in self.group_nsfw.hits[:8]),
+            "members_checked": len(self.scans),
+            "nsfw_members": len(self.nsfw),
+            "alt_members": len(self.alts),
+            "suspicious_members": len(self.suspicious),
+            "scanned_by": scanned_by,
+        }
+
+    def player_records(self, scanned_by: int | None) -> list[dict]:
+        found_via = f"group scan: {self.group.name}"
+        return [
+            s.result.record(self.config, depth="full", found_via=found_via, checked_by=scanned_by)
+            for s in self.scans if s.result is not None
+        ]
+
     @property
     def clean_count(self) -> int:
         noted = {s.member.user_id for s in self.flagged + self.suspicious + self.trusted}
