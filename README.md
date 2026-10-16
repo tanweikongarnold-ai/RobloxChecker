@@ -99,7 +99,7 @@ If an account keeps getting flagged but is actually fine (a friend's new account
 |---|---|
 | `/check user [public]` | Full scan in three pages: **1 · Overview** (alt score with reasons, NSFW matches, badges, social stats), **2 · Friends** (every friend with a quick check of their age, badges, name and bio, flagged ones first, plus a button to open cases for them), **3 · Groups & badges** (their groups with NSFW names flagged, recent badges, past usernames). The friends page fills in by itself in about 30 seconds. Opens a case automatically if something crosses a threshold. Only you see the result unless `public:True`. |
 | `/badges user [page]` | A player's badges and when each was earned. |
-| `/groupscan group [members] [public]` | Checks a Roblox group's newest members (50 by default, up to 200) and lists the NSFW accounts, likely alts and suspicious ones. One button opens cases for everyone flagged. Takes about a minute per 50 members. |
+| `/groupscan group [members] [public] [thorough]` | Checks a Roblox group's newest members (50 by default, up to 200) and lists the NSFW accounts, likely alts and suspicious ones. Everyone gets a quick check (profile, bio, age, badges); only members that look off get the full check, so 50 members take well under a minute. `thorough:True` gives everyone the full check (slower, but also catches NSFW past usernames and groups on clean-looking accounts). One button opens cases for everyone flagged. |
 | `/case list [status] [only] [page]` | The review queue. `only:unclaimed` or `only:mine` narrow it down. |
 | `/case view` · `claim` · `release` · `resolve` · `note` · `reopen` | Work a case. Case numbers autocomplete. |
 | `/case open user reason` | Open a case by hand, even if nothing was auto-flagged. |

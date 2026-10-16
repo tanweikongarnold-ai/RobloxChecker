@@ -370,8 +370,13 @@ def group_scan_embed(report: "GroupScanReport", open_cases: dict[int, int] | Non
     embed = discord.Embed(title=clip(f"Group scan · {group.name}", 256), url=group.url, colour=colour)
 
     total = f" of **{group.member_count:,}**" if group.member_count else ""
+    how = (
+        "Full check on every member."
+        if report.thorough
+        else f"Quick check on all of them, full check on the **{report.full_checks}** that looked off."
+    )
     summary = [
-        f"Checked the newest **{len(report.scans)}**{total} members.",
+        f"Checked the newest **{len(report.scans)}**{total} members. {how}",
         f"🔞 **{len(nsfw)}** NSFW · 🕵️ **{len(alts)}** likely alts · ⚠️ **{len(suspicious)}** suspicious · "
         f"✅ **{report.clean_count}** look fine",
     ]

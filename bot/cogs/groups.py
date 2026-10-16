@@ -96,6 +96,7 @@ class Groups(commands.Cog):
         group="Roblox group link, group ID or exact group name",
         members="How many of the newest members to check (5-200, default 50)",
         public="Post the result in this channel for everyone (default: only you can see it)",
+        thorough="Full check on every member: slower, but also catches NSFW past usernames and groups",
     )
     @app_commands.guild_only()
     @moderator_only()
@@ -105,6 +106,7 @@ class Groups(commands.Cog):
         group: str,
         members: app_commands.Range[int, 5, 200] = 50,
         public: bool = False,
+        thorough: bool = False,
     ) -> None:
         assert interaction.guild is not None
         await interaction.response.defer(ephemeral=not public, thinking=True)
@@ -120,16 +122,19 @@ class Groups(commands.Cog):
         async with self._lock:
             last_update = 0.0
 
-            async def progress(info: GroupInfo, done: int, total: int) -> None:
+            async def progress(info: GroupInfo, stage: str, done: int, total: int) -> None:
                 nonlocal last_update
                 now = time.monotonic()
-                if done in (0, total) or now - last_update >= 3:
+                if done in (0, total) or now - last_update >= 2:
                     last_update = now
                     name = discord.utils.escape_markdown(info.name)
-                    await say(f"🔎 Checking **{name}**: {done}/{total} members done…")
+                    if stage == "quick":
+                        await say(f"🔎 **{name}**: quick check on every member… {done}/{total}")
+                    else:
+                        await say(f"🔎 **{name}**: full check on the {total} that looked off… {done}/{total}")
 
             await say("🔎 Looking up the group…")
-            report = await scan_group(self.bot, interaction.guild.id, group, members, progress)
+            report = await scan_group(self.bot, interaction.guild.id, group, members, progress, thorough=thorough)
 
         await self.bot.db.save_players(interaction.guild.id, report.player_records(interaction.user.id))
         await self.bot.db.save_group(interaction.guild.id, report.group_record(interaction.user.id))

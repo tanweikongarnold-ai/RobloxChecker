@@ -38,6 +38,10 @@ class _HTTPStatus(RobloxError):
         self.status = status
 
 
+async def _done(value):
+    return value
+
+
 class RobloxClient:
     """Small wrapper around aiohttp with retries, a concurrency cap and a short GET cache.
 
@@ -45,9 +49,12 @@ class RobloxClient:
     only cost one round of API calls.
     """
 
-    def __init__(self, *, max_concurrency: int = 4, cache_ttl: float = 120.0, max_badges: int = 500):
+    def __init__(self, *, max_concurrency: int = 6, cache_ttl: float = 120.0, max_badges: int = 500):
         self._session: aiohttp.ClientSession | None = None
         self._semaphore = asyncio.Semaphore(max_concurrency)
+        # When Roblox says "too many requests", every request waits until this time,
+        # instead of each one retrying on its own and making it worse.
+        self._cooldown_until = 0.0
         self._cache: dict[str, tuple[float, Any]] = {}
         self._cache_ttl = cache_ttl
         self.max_badges = max_badges
@@ -78,22 +85,28 @@ class RobloxClient:
                 return cached[1]
 
         delay = 1.0
-        for attempt in range(4):
+        for attempt in range(5):
+            pause = self._cooldown_until - time.monotonic()
+            if pause > 0:
+                await asyncio.sleep(pause)
             try:
                 async with self._semaphore:
                     async with self._session.request(method, url, params=params, json=json) as resp:
                         if resp.status == 429 or resp.status >= 500:
                             retry_after = resp.headers.get("Retry-After")
-                            wait = float(retry_after) if retry_after and retry_after.isdigit() else delay
+                            wait = min(30.0, float(retry_after) if retry_after and retry_after.isdigit() else delay)
                             log.warning("Roblox %s on %s, retrying in %.1fs", resp.status, url, wait)
-                            await asyncio.sleep(min(wait, 30))
                             delay *= 2
+                            if resp.status == 429:
+                                self._cooldown_until = max(self._cooldown_until, time.monotonic() + wait)
+                            else:
+                                await asyncio.sleep(wait)
                             continue
                         if resp.status >= 400:
                             raise _HTTPStatus(resp.status, url)
                         data = await resp.json(content_type=None)
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-                if attempt == 3:
+                if attempt == 4:
                     raise RobloxError(f"Could not reach Roblox: {exc}") from exc
                 await asyncio.sleep(delay)
                 delay *= 2
@@ -232,6 +245,21 @@ class RobloxClient:
             return item.get("imageUrl"), item.get("state")
         return None, None
 
+    async def get_headshots(self, user_ids: list[int]) -> dict[int, tuple[str | None, str | None]]:
+        """``{id: (image url, state)}`` for up to 100 players per request."""
+        found: dict[int, tuple[str | None, str | None]] = {}
+        for start in range(0, len(user_ids), 100):
+            data = await self._request(
+                "GET",
+                "https://thumbnails.roblox.com/v1/users/avatar-headshot",
+                params={"userIds": ",".join(map(str, user_ids[start : start + 100])), "size": "150x150",
+                        "format": "Png", "isCircular": "false"},
+            )
+            for item in data.get("data") or []:
+                if item.get("targetId"):
+                    found[int(item["targetId"])] = (item.get("imageUrl"), item.get("state"))
+        return found
+
     async def can_view_inventory(self, user_id: int) -> bool | None:
         data = await self._request("GET", f"https://inventory.roblox.com/v1/users/{user_id}/can-view-inventory")
         return data.get("canView")
@@ -369,7 +397,9 @@ class RobloxClient:
 
     # -------------------------------------------------------------- full scan
 
-    async def fetch_account(self, user_id: int, *, max_badges: int | None = None) -> AccountData:
+    async def fetch_account(
+        self, user_id: int, *, max_badges: int | None = None, headshot: tuple[str | None, str | None] | None = None
+    ) -> AccountData:
         """Fetch everything the analysers need. Only the core profile is mandatory."""
         user = await self.get_user(user_id)
         (
@@ -390,7 +420,7 @@ class RobloxClient:
             self._optional(self.get_groups(user_id)),
             self._optional(self.get_username_history(user_id), []),
             self._optional(self.get_legacy_badges(user_id), []),
-            self._optional(self.get_headshot(user_id), (None, None)),
+            self._optional(self.get_headshot(user_id), (None, None)) if headshot is None else _done(headshot),
             self._optional(self.can_view_inventory(user_id)),
         )
 

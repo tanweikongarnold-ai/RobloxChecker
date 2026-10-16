@@ -80,6 +80,9 @@ class FakeRobloxGroups(RobloxClient):
             return {"data": []}
         if "roblox-badges" in url:
             return []
+        if "avatar-headshot" in url and params.get("userIds"):
+            ids = [int(i) for i in str(params["userIds"]).split(",")]
+            return {"data": [{"targetId": i, "state": "Completed", "imageUrl": None} for i in ids if i in PEOPLE]}
         if "avatar-headshot" in url:
             return {"data": [{"targetId": uid, "state": "Completed", "imageUrl": None}]}
         if "can-view-inventory" in url:
@@ -115,11 +118,14 @@ async def test_scan_sorts_members_into_groups(bot):  # noqa: F811
     await bot.db.add_trusted(1, 105, "TrustedAlt9999", 9, "staff test account")
     seen = []
 
-    async def progress(group, done, total):
-        seen.append((group.name, done, total))
+    async def progress(group, stage, done, total):
+        seen.append((group.name, stage, done, total))
 
     report = await scan_group(bot, 1, "https://www.roblox.com/communities/555", 50, progress)
-    assert seen[0] == ("Cool Builders", 0, 6) and seen[-1] == ("Cool Builders", 6, 6)
+    assert seen[0] == ("Cool Builders", "quick", 0, 6)
+    assert ("Cool Builders", "quick", 6, 6) in seen
+    # GoodMain (old, lots of badges) passes the quick check; the other four get a closer look.
+    assert seen[-1] == ("Cool Builders", "full", 4, 4)
     assert [s.member.user_id for s in report.nsfw] == [102]
     assert [s.member.user_id for s in report.alts] == [103]
     assert [s.member.user_id for s in report.suspicious] == [106]
@@ -129,6 +135,7 @@ async def test_scan_sorts_members_into_groups(bot):  # noqa: F811
     # Bulk scans read one badge page, so big collections show as "100+".
     good = next(s for s in report.scans if s.member.user_id == 101)
     assert len(good.result.account.badges) == 100 and good.result.account.badges_truncated
+    assert good.depth == "quick" and report.full_checks == 4
 
     embed = group_scan_embed(report, {103: 7})
     assert len(embed) <= 6000 and all(len(f.value) <= 1024 for f in embed.fields)
@@ -164,7 +171,9 @@ async def test_groupscan_command_and_open_cases_button(bot):  # noqa: F811
     run = ScanInteraction(guild, type("U", (), {"id": 5})())
     await cog.groupscan.callback(cog, run, "Cool Builders", 50, False)
     assert run.response.deferred == {"ephemeral": True, "thinking": True}
-    assert any("Checking **Cool Builders**" in (e.get("content") or "") for e in run.edits)
+    assert any("quick check on every member" in (e.get("content") or "") for e in run.edits)
+    assert any("full check on the 4 that looked off" in (e.get("content") or "") for e in run.edits)
+    assert "full check on the **4** that looked off" in run.edits[-1]["embed"].description
     final = run.edits[-1]
     assert final["content"] is None and final["embed"].title == "Group scan · Cool Builders"
     view = final["view"]
@@ -187,3 +196,70 @@ async def test_groupscan_command_and_open_cases_button(bot):  # noqa: F811
     await view.open_cases(again)
     assert len(await bot.db.list_cases(1, status="open")) == 2
     assert "2 already had an open case" in again.followup.sent[-1][0]
+
+
+async def test_fast_scan_matches_thorough_with_far_fewer_requests(bot):  # noqa: F811
+    async def run(thorough):
+        client = FakeRobloxGroups()
+        use_fake_roblox(bot, client)
+        report = await scan_group(bot, 1, "555", 50, thorough=thorough)
+        groups = (sorted(s.member.user_id for s in report.nsfw), sorted(s.member.user_id for s in report.alts),
+                  sorted(s.member.user_id for s in report.suspicious))
+        return client.calls, groups, report
+
+    fast_calls, fast_groups, fast = await run(False)
+    slow_calls, slow_groups, slow = await run(True)
+    assert fast_groups == slow_groups  # same answer
+    assert slow.full_checks == 5 and fast.full_checks == 4
+    # The clean member never had their friends, groups or badge dates looked up.
+    assert not any("/users/101/friends" in c or "/users/101/groups" in c for c in fast_calls)
+    assert any("/users/101/friends" in c for c in slow_calls)
+    # Avatars come in one request for the whole group.
+    assert sum("avatar-headshot" in c for c in fast_calls) == 1
+    assert len(fast_calls) < len(slow_calls)
+
+
+async def test_too_many_requests_pauses_everyone(monkeypatch):
+    """After a 429, later requests wait for the same cooldown instead of hammering Roblox."""
+    import asyncio
+
+    from bot import roblox as roblox_module
+
+    slept = []
+    real_sleep = asyncio.sleep
+
+    async def fake_sleep(seconds):
+        slept.append(round(seconds))
+        await real_sleep(0)
+
+    monkeypatch.setattr(roblox_module.asyncio, "sleep", fake_sleep)
+
+    class Resp:
+        def __init__(self, status, body=None, headers=None):
+            self.status, self.body, self.headers = status, body or {}, headers or {}
+
+        async def json(self, content_type=None):
+            return self.body
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    class Session:
+        closed = False
+
+        def __init__(self):
+            self.replies = [Resp(429, headers={"Retry-After": "5"}), Resp(200, {"ok": 1}), Resp(200, {"ok": 2})]
+
+        def request(self, method, url, params=None, json=None):
+            return self.replies.pop(0)
+
+    client = RobloxClient()
+    client._session = Session()
+    assert await client._request("GET", "https://users.roblox.com/a") == {"ok": 1}
+    assert slept == [5]  # waited out the Retry-After
+    # A brand-new request still respects the cooldown (the fake clock never moved).
+    assert await client._request("GET", "https://users.roblox.com/b") == {"ok": 2}
+    assert slept[-1] == 5
