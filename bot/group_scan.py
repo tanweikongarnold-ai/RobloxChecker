@@ -18,12 +18,17 @@ if TYPE_CHECKING:
 # Badge pages are the slowest part of a scan; one page (100) is plenty to judge an account in bulk.
 GROUP_SCAN_BADGES = 100
 QUICK_PARALLEL = 6  # step 1: 2 requests per member
+# Rest between the quick check and the full check so Roblox's request limit can reset.
+# Set to 0 to turn the break off.
+BREAK_SECONDS = 20
+BREAK_UPDATE_EVERY = 5  # how often the countdown in Discord updates
 FULL_PARALLEL = 3  # step 2: ~8 more requests per member
 # A quick check doesn't know friends (+10 if none) or groups (+6 if none), so anyone within
 # this many points of "suspicious" gets the full check.
 CLOSER_LOOK_MARGIN = 16
 
-Progress = Callable[[GroupInfo, str, int, int], Awaitable[None]]  # (group, "quick" | "full", done, total)
+# (group, stage, done, total). Stage "quick" and "full" count members; "break" counts down seconds left.
+Progress = Callable[[GroupInfo, str, int, int], Awaitable[None]]
 
 
 @dataclass(slots=True)
@@ -177,6 +182,13 @@ async def scan_group(
 
     # Step 2: the full check (friends, groups, past names, badge dates) where it could change the answer.
     closer = [s for s in report.scans if s.result and (thorough or needs_closer_look(s.result, config))]
+    if closer and BREAK_SECONDS > 0:
+        remaining = BREAK_SECONDS
+        while remaining > 0:
+            await tell("break", remaining, BREAK_SECONDS)
+            step = min(BREAK_UPDATE_EVERY, remaining)
+            await asyncio.sleep(step)
+            remaining -= step
     gate = asyncio.Semaphore(FULL_PARALLEL)
     done = 0
     if closer:

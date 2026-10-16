@@ -125,11 +125,16 @@ class Groups(commands.Cog):
             async def progress(info: GroupInfo, stage: str, done: int, total: int) -> None:
                 nonlocal last_update
                 now = time.monotonic()
-                if done in (0, total) or now - last_update >= 2:
+                if done in (0, total) or stage == "break" or now - last_update >= 2:
                     last_update = now
                     name = discord.utils.escape_markdown(info.name)
                     if stage == "quick":
                         await say(f"🔎 **{name}**: quick check on every member… {done}/{total}")
+                    elif stage == "break":
+                        await say(
+                            f"⏸️ **{name}**: quick check done. Taking a {total}-second break so Roblox doesn't "
+                            f"slow us down, then the full check… {done}s"
+                        )
                     else:
                         await say(f"🔎 **{name}**: full check on the {total} that looked off… {done}/{total}")
 

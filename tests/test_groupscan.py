@@ -263,3 +263,62 @@ async def test_too_many_requests_pauses_everyone(monkeypatch):
     # A brand-new request still respects the cooldown (the fake clock never moved).
     assert await client._request("GET", "https://users.roblox.com/b") == {"ok": 2}
     assert slept[-1] == 5
+
+
+async def test_break_between_quick_and_full_check(bot, monkeypatch):  # noqa: F811
+    from bot import group_scan
+
+    monkeypatch.setattr(group_scan, "BREAK_SECONDS", 20)
+    slept = []
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
+
+    monkeypatch.setattr(group_scan.asyncio, "sleep", fake_sleep)
+    use_fake_roblox(bot, FakeRobloxGroups())
+    seen = []
+
+    async def progress(group, stage, done, total):
+        seen.append((stage, done, total))
+
+    await scan_group(bot, 1, "555", 50, progress)
+    stages = [s for s, _, _ in seen]
+    # quick check, then the countdown, then the full check, in that order
+    assert stages.index("break") > max(i for i, s in enumerate(stages) if s == "quick")
+    assert max(i for i, s in enumerate(stages) if s == "break") < stages.index("full")
+    assert [d for s, d, _ in seen if s == "break"] == [20, 15, 10, 5]
+    assert sum(slept) == 20
+
+
+async def test_no_break_when_nobody_needs_a_full_check(bot, monkeypatch):  # noqa: F811
+    from bot import group_scan
+
+    monkeypatch.setattr(group_scan, "BREAK_SECONDS", 20)
+    monkeypatch.setattr(group_scan, "needs_closer_look", lambda result, config: False)
+    slept = []
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
+
+    monkeypatch.setattr(group_scan.asyncio, "sleep", fake_sleep)
+    use_fake_roblox(bot, FakeRobloxGroups())
+    report = await scan_group(bot, 1, "555", 50)
+    assert slept == [] and report.full_checks == 0
+
+
+async def test_countdown_message(bot, monkeypatch):  # noqa: F811
+    from bot import group_scan
+
+    monkeypatch.setattr(group_scan, "BREAK_SECONDS", 10)
+
+    async def fake_sleep(seconds):
+        return None
+
+    monkeypatch.setattr(group_scan.asyncio, "sleep", fake_sleep)
+    use_fake_roblox(bot, FakeRobloxGroups())
+    cog = bot.get_cog("Groups")
+    run = ScanInteraction(FakeGuild(FakeChannel()), type("U", (), {"id": 5})())
+    await cog.groupscan.callback(cog, run, "555", 50, False)
+    messages = [e.get("content") or "" for e in run.edits]
+    assert any("Taking a 10-second break" in m and m.endswith("10s") for m in messages)
+    assert any("Taking a 10-second break" in m and m.endswith("5s") for m in messages)
